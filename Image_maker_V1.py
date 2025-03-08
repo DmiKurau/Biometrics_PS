@@ -21,7 +21,7 @@ image_name = ""
 image_location = ""
 threshold = 0  # zmienia binaryzacje, mniej = wiecej bialego
 image = []
-
+state="o"
 
 # image.show()
 
@@ -176,7 +176,10 @@ def make_images(): #przyciski
 
 
 def all_bins(): #wszystkie binaryzacje, +timer
+
     start_time = time.time()
+    global state
+    state = "all"
 
     binarize_image()
     binarize_image("r")
@@ -188,6 +191,8 @@ def all_bins(): #wszystkie binaryzacje, +timer
 
 def all_hists(): #wszystkie histogramy, +timer
     start_time = time.time()
+    global state
+    state = "all"
 
     create_histogram()
     create_histogram("r")
@@ -200,6 +205,8 @@ def all_hists(): #wszystkie histogramy, +timer
 
 def all_everything(): #binaryzacje + histogramy, +timer
     start_time = time.time()
+    global state
+    state="all"
 
     binarize_image()
     binarize_image("r")
@@ -218,7 +225,8 @@ def all_everything(): #binaryzacje + histogramy, +timer
 
 
 def binarize_image(method='average'):
-    global image, image_location, image_name, threshold
+    global image, image_location, image_name, threshold,state
+    state="o"
     if method == 'average':  # binaruzje srednia (?)
         grayscale_image = image.convert('L')
         grayscale_array = np.array(grayscale_image)
@@ -242,13 +250,15 @@ def binarize_image(method='average'):
     else:
         raise ValueError(f"metody: 'average', 'r', 'g', 'b'")
 
+    if state=="o":
+        result_image.show()
     result_image.save(new_file_path)
     return result_image
 
 
 def create_histogram(channel='all'):
-    global image, image_location, image_name
-
+    global image, image_location, image_name, state
+    state = "o"
     figure, axis = plt.subplots(figsize=(10, 6))
 
     if channel == 'all':
@@ -309,8 +319,9 @@ def create_histogram(channel='all'):
     # Create directories if they don't exist
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
 
-
-    plt.savefig(save_path)
+    plt.savefig(save_path)  # Always save first
+    if state == "o":
+        plt.show()
 
 
 
