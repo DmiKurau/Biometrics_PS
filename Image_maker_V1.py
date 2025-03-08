@@ -109,6 +109,10 @@ def validate_thresh(rat, feedback4, submit_button): #walidacja tego progu
 
 
 def make_images(): #przyciski
+
+    label1 = ttk.Label(window, text="Pliki zostaną zapisany w folderze: {}".format(image_location), background="#e7e7e7")
+    label1.place(x=110, y=20)
+
     show_button = ttk.Button(window, text="pokaz obraz", width=20, command= lambda: image.show())
     show_button.place(x=190, y=50)
 
