@@ -19,9 +19,11 @@ window.title("Program zdjeciowy")
 
 image_name = ""
 image_location = ""
-threshold = 0  # zmienia binaryzacje, mniej = wiecej bialego
+#threshold = 0  # zmienia binaryzacje, mniej = wiecej bialego
 image = []
 state="o"
+stretch = tk.BooleanVar()
+stretch.set(False)
 
 # image.show()
 
@@ -115,6 +117,9 @@ def make_images(): #przyciski
 
     show_button = ttk.Button(window, text="pokaz obraz", width=20, command= lambda: image.show())
     show_button.place(x=190, y=50)
+
+    stretching_checkbox = ttk.Checkbutton(window,text="Rozciagniecie histogramu", variable=stretch)
+    stretching_checkbox.place(x=20, y=75)
 
     bin_normal_button = ttk.Button(window, text="binaryzacja srednia", width=20, command= lambda: binarize_image())
     bin_normal_button.place(x=90, y=100)
@@ -270,6 +275,18 @@ def create_histogram(channel='all'):
         rgb_image = image.convert('RGB')
         rgb_array = np.array(rgb_image)
 
+
+        if stretch.get():
+            stretched_array = np.zeros_like(rgb_array)
+            for i in range(3):  # Process each RGB channel
+                channel_data = rgb_array[:, :, i] #1sze : wybiera wszystkie wiersze, 2gie- kolumne, 3cie, pokazuje R,G, czy B
+                vmin = np.min(channel_data)
+                vmax = np.max(channel_data)
+                imax = 255
+                #  LUT(i) = (imax/(vmax-vmin))*(i-vmin)
+                stretched_array[:, :, i] = (imax / (vmax - vmin)) * (channel_data - vmin)
+            rgb_array = stretched_array
+
         colors = ['r', 'g', 'b']
         channel_names = ('Red', 'Green', 'Blue')
 
@@ -289,6 +306,12 @@ def create_histogram(channel='all'):
         channel_index = {'r': 0, 'g': 1, 'b': 2}[channel]
         channel_data = rgb_array[:, :, channel_index].flatten()
 
+        if stretch.get():
+            vmin = np.min(channel_data)
+            vmax = np.max(channel_data)
+            imax = 255
+            # Apply the LUT formula: LUT(i) = (imax/(vmax-vmin))*(i-vmin)
+            channel_data = (imax / (vmax - vmin)) * (channel_data - vmin)
 
         color_name = {'r': 'Red', 'g': 'Green', 'b': 'Blue'}[channel]
         axis.hist(channel_data, bins=256, range=(0, 255),
@@ -301,6 +324,12 @@ def create_histogram(channel='all'):
         gray_image = image.convert('L')
         gray_array = np.array(gray_image).flatten()
 
+        if stretch.get():
+            vmin = np.min(gray_array)
+            vmax = np.max(gray_array)
+            imax = 255
+            # Apply the LUT formula: LUT(i) = (imax/(vmax-vmin))*(i-vmin)
+            gray_array = (imax / (vmax - vmin)) * (gray_array - vmin)
 
         axis.hist(gray_array, bins=256, range=(0, 255),
                   color='gray', alpha=0.7, label='Grayscale')
@@ -315,10 +344,10 @@ def create_histogram(channel='all'):
     axis.grid(True, alpha=0.3)
 
 
-
+    is_stretched="Rozciagniete"*int(stretch.get())
 
     plt.tight_layout()
-    save_path = os.path.join(timestamped_folder_path, f"histogram_{channel}_{image_name}").replace('\\', '/')
+    save_path = os.path.join(timestamped_folder_path, f"histogram_{is_stretched}_{channel}_{image_name}").replace('\\', '/')
 
     # Create directories if they don't exist
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
