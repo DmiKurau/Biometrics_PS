@@ -4,15 +4,16 @@ from tkinter import ttk #input fields
 from tkinter import filedialog as fd #file open
 from tkinter.messagebox import showinfo #info box
 from PIL import Image
+import cv2
 import numpy as np
-import matplotlib.pyplot as plt
+from matplotlib import pyplot as plt
 import time
 from datetime import datetime
 
 
 window = tk.Tk()
 window.config(background="#e7e7e7")
-window.geometry("600x800")
+window.geometry("1000x800")
 window.resizable(False, False)
 window.title("Program zdjeciowy")
 
@@ -24,7 +25,10 @@ image = []
 state="o"
 stretch = tk.BooleanVar()
 stretch.set(False)
-
+equalise=tk.BooleanVar()
+equalise.set(False)
+otsu=tk.BooleanVar()
+otsu.set(False)
 # image.show()
 
 
@@ -111,59 +115,67 @@ def validate_thresh(rat, feedback4, submit_button): #walidacja tego progu
 
 
 def make_images(): #przyciski
-
+    left_col=100
+    right_col=500
+    mid_col=300
     label1 = ttk.Label(window, text="Pliki zostaną zapisany w folderze: {}".format(image_location), background="#e7e7e7")
-    label1.place(x=110, y=20)
+    label1.place(x=mid_col, y=20)
 
     show_button = ttk.Button(window, text="pokaz obraz", width=20, command= lambda: image.show())
-    show_button.place(x=190, y=50)
+    show_button.place(x=right_col, y=50)
 
     stretching_checkbox = ttk.Checkbutton(window,text="Rozciagniecie histogramu", variable=stretch)
-    stretching_checkbox.place(x=20, y=75)
+    stretching_checkbox.place(x=left_col, y=100)
+
+    equalisation_checkbox = ttk.Checkbutton(window, text="wyrownanie histogramu", variable=equalise)
+    equalisation_checkbox.place(x=mid_col, y=100)
+
+    otsu_checkbox = ttk.Checkbutton(window, text="metoda Otsu", variable=otsu)
+    otsu_checkbox.place(x=right_col, y=100)
 
     bin_normal_button = ttk.Button(window, text="binaryzacja srednia", width=20, command= lambda: binarize_image())
-    bin_normal_button.place(x=90, y=100)
+    bin_normal_button.place(x=left_col, y=200)
 
     bin_red_button = ttk.Button(window, text="binaryzacja czerwona ", width=20, command= lambda: binarize_image('r'))
-    bin_red_button.place(x=90, y=150)
+    bin_red_button.place(x=left_col, y=250)
 
     bin_green_button = ttk.Button(window, text="binaryzacja zielona", width=20, command= lambda: binarize_image('g'))
-    bin_green_button.place(x=90, y=200)
+    bin_green_button.place(x=left_col, y=300)
 
     bin_blue_button = ttk.Button(window, text="binaryzacja niebieska", width=20, command= lambda: binarize_image('b'))
-    bin_blue_button.place(x=90, y=250)
+    bin_blue_button.place(x=left_col, y=350)
 
     hist_all_button = ttk.Button(window, text="sredni histogram", width=20, command= lambda: create_histogram())
-    hist_all_button.place(x=290, y=100)
+    hist_all_button.place(x=right_col, y=200)
 
     hist_red_button = ttk.Button(window, text="czerwony histogram ", width=20, command= lambda: create_histogram('r'))
-    hist_red_button.place(x=290, y=150)
+    hist_red_button.place(x=right_col, y=250)
 
     hist_green_button = ttk.Button(window, text="zielony histogram", width=20, command= lambda: create_histogram('g'))
-    hist_green_button.place(x=290, y=200)
+    hist_green_button.place(x=right_col, y=300)
 
     hist_blue_button = ttk.Button(window, text="niebieski histogram", width=20, command= lambda: create_histogram('b'))
-    hist_blue_button.place(x=290, y=250)
+    hist_blue_button.place(x=right_col, y=350)
 
     hist_gray_button = ttk.Button(window, text="szary histogram", width=20, command= lambda: create_histogram('average'))
-    hist_gray_button.place(x=290, y=300)
+    hist_gray_button.place(x=right_col, y=400)
 
 
 
     bin_full_button = ttk.Button(window, text="wszystkie binaryzacje", width=20, command= lambda: all_bins())
-    bin_full_button.place(x=90, y=400)
+    bin_full_button.place(x=left_col, y=550)
 
     hist_full_button = ttk.Button(window, text="wszystkie histogramy", width=20, command= lambda: all_hists())
-    hist_full_button.place(x=290, y=400)
+    hist_full_button.place(x=right_col, y=550)
 
     all_button = ttk.Button(window, text="wszystko", width=20, command= lambda: all_everything())
-    all_button.place(x=190, y=500)
+    all_button.place(x=mid_col, y=600)
 
     close_button = ttk.Button(window, text="Zamknij okienko", width=20, command=window.destroy)
-    close_button.place(x=90, y=700)
+    close_button.place(x=left_col, y=700)
 
     restart_button = ttk.Button(window, text="zacznij od nowa", width=20, command= lambda: select_file())
-    restart_button.place(x=290, y=700)
+    restart_button.place(x=right_col, y=700)
 
 
     info_button = ttk.Button(
@@ -178,7 +190,7 @@ def make_images(): #przyciski
             "przycisk \"wszystko\" wykonuje wszystkie binaryzacje/histogramy, wynikujace pliki zapisuje\n\n\n"
         )
     )
-    info_button.place(x=190, y=600)
+    info_button.place(x=mid_col, y=650)
 
 
 
@@ -194,7 +206,7 @@ def all_bins(): #wszystkie binaryzacje, +timer
     binarize_image("r")
     binarize_image("g")
     binarize_image("b")
-
+    state = "o"
     elapsed_time = time.time() - start_time
     showinfo(title="Czas", message=f"Ukończono w ciągu {elapsed_time:.4f} sekund")
 
@@ -208,7 +220,7 @@ def all_hists(): #wszystkie histogramy, +timer
     create_histogram("g")
     create_histogram("b")
     create_histogram("average")
-
+    state = "o"
     elapsed_time = time.time() - start_time
     showinfo(title="Czas", message=f"Ukończono w ciągu {elapsed_time:.4f} sekund")
 
@@ -226,16 +238,55 @@ def all_everything(): #binaryzacje + histogramy, +timer
     create_histogram("g")
     create_histogram("b")
     create_histogram("average")
-
+    state = "o"
     elapsed_time = time.time() - start_time
     showinfo(title="Czas", message=f"Ukończono w ciągu {elapsed_time:.4f} sekund")
 
 
 
+#########################################################################################################
+def equalise_single_channel(image):
 
+    # Flatten the image into a 1D array
+    flat = image.flatten()
+    hist, bins = np.histogram(flat, bins=256, range=[0, 256])
+
+    # Normalize the histogram to get the probability distribution function (PDF)
+    pdf = hist / flat.size
+
+    # Compute the cumulative distribution function (CDF)
+    cdf = np.cumsum(pdf)
+
+    # Normalize the CDF
+    cdf_normalized = (cdf * 255).astype(np.uint8)
+
+    # Map the original image pixels to equalized values
+    equalized = cdf_normalized[flat]
+
+    # Reshape back to the original image shape
+    return equalized.reshape(image.shape)
+
+
+def equalise_histogram(image):
+
+    # Check if image is grayscale or RGB
+    if len(image.shape) == 2:
+        return equalise_single_channel(image)
+    else:
+        # Apply to each channel separately
+        result = np.zeros_like(image)
+        for i in range(3):
+            result[:, :, i] = equalise_single_channel(image[:, :, i])
+        return result
+###########################################################################################################
+
+
+
+
+#########################################################################################################
 def binarize_image(method='average'):
     global image, image_location, image_name, threshold,state
-    state="o"
+
     if method == 'average':  # binaruzje srednia (?)
         grayscale_image = image.convert('L')
         grayscale_array = np.array(grayscale_image)
@@ -267,7 +318,7 @@ def binarize_image(method='average'):
 
 def create_histogram(channel='all'):
     global image, image_location, image_name, state
-    state = "o"
+
     figure, axis = plt.subplots(figsize=(10, 6))
 
     if channel == 'all':
@@ -275,6 +326,8 @@ def create_histogram(channel='all'):
         rgb_image = image.convert('RGB')
         rgb_array = np.array(rgb_image)
 
+        if equalise.get():
+            rgb_array = equalise_histogram(rgb_array)
 
         if stretch.get():
             stretched_array = np.zeros_like(rgb_array)
@@ -298,13 +351,24 @@ def create_histogram(channel='all'):
         axis.set_title('RGB Histogram')
         axis.legend()
 
+        if equalise.get() or stretch.get():
+            processed_image = Image.fromarray(rgb_array.astype('uint8'), 'RGB')
+        else:
+            processed_image = image.convert('RGB')
+
+
     elif channel in ['r', 'g', 'b']:
         rgb_image = image.convert('RGB')
         rgb_array = np.array(rgb_image)
 
         #get specific channel
         channel_index = {'r': 0, 'g': 1, 'b': 2}[channel]
-        channel_data = rgb_array[:, :, channel_index].flatten()
+        channel_data = rgb_array[:, :, channel_index].copy()
+        flat_channel_data = channel_data.flatten()
+
+        if equalise.get():
+            processed_flat_data = equalise_single_channel(flat_channel_data)
+            channel_data = processed_flat_data.reshape(channel_data.shape)
 
         if stretch.get():
             vmin = np.min(channel_data)
@@ -314,15 +378,22 @@ def create_histogram(channel='all'):
             channel_data = (imax / (vmax - vmin)) * (channel_data - vmin)
 
         color_name = {'r': 'Red', 'g': 'Green', 'b': 'Blue'}[channel]
-        axis.hist(channel_data, bins=256, range=(0, 255),
+        axis.hist(channel_data.flatten(), bins=256, range=(0, 255),
                   color=channel, alpha=0.7, label=color_name)
 
         axis.set_title(f'Histogram kanalu: {color_name}')
         axis.legend()
 
+        processed_image = Image.fromarray(channel_data.astype('uint8'), 'L')
+
     elif channel == 'average':
         gray_image = image.convert('L')
-        gray_array = np.array(gray_image).flatten()
+        gray_array = np.array(gray_image)
+        flat_gray_array = gray_array.flatten()
+
+        if equalise.get():
+            processed_flat_data = equalise_single_channel(flat_gray_array)
+            gray_array = processed_flat_data.reshape(gray_array.shape)
 
         if stretch.get():
             vmin = np.min(gray_array)
@@ -331,11 +402,14 @@ def create_histogram(channel='all'):
             # Apply the LUT formula: LUT(i) = (imax/(vmax-vmin))*(i-vmin)
             gray_array = (imax / (vmax - vmin)) * (gray_array - vmin)
 
-        axis.hist(gray_array, bins=256, range=(0, 255),
+        axis.hist(gray_array.flatten(), bins=256, range=(0, 255),
                   color='gray', alpha=0.7, label='Grayscale')
 
         axis.set_title('histogram szary')
         axis.legend()
+
+        processed_image = Image.fromarray(gray_array.astype('uint8'), 'L')
+
 
 
     axis.set_xlabel('Wartosc pikseli')
@@ -345,9 +419,9 @@ def create_histogram(channel='all'):
 
 
     is_stretched="Rozciagniete"*int(stretch.get())
-
+    is_equalised="Wyrownane"*int(equalise.get())
     plt.tight_layout()
-    save_path = os.path.join(timestamped_folder_path, f"histogram_{is_stretched}_{channel}_{image_name}").replace('\\', '/')
+    save_path = os.path.join(timestamped_folder_path, f"histogram_{is_stretched}_{is_equalised}_{channel}_{image_name}").replace('\\', '/')
 
     # Create directories if they don't exist
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
@@ -356,6 +430,62 @@ def create_histogram(channel='all'):
     if state == "o":
         plt.show()
 
+    if otsu.get() and processed_image is not None:
+        # Convert to grayscale if not already
+        gray_img = processed_image.convert('L')
+        gray_array = np.array(gray_img)
+
+        # Calculate histogram
+        hist, bins = np.histogram(gray_array.flatten(), 256, [0, 256])
+
+        # Calculate cumulative sums
+        cum_sum = hist.cumsum()
+        cum_mean = (hist * np.arange(256)).cumsum()
+        total_pixels = cum_sum[-1]
+
+        # Initialize variables
+        max_variance = 0
+        t_hold = 0
+
+        # Find threshold with maximum between-class variance
+        for t in range(1, 256):
+            # Weights
+            w0 = cum_sum[t - 1]
+            w1 = total_pixels - w0
+
+            # Skip if any class is empty
+            if w0 == 0 or w1 == 0:
+                continue
+
+            # Class means
+            mean0 = cum_mean[t - 1] / w0
+            mean1 = (cum_mean[-1] - cum_mean[t - 1]) / w1
+
+            # Calculate between-class variance
+            variance = w0 * w1 * ((mean0 - mean1) ** 2)
+
+            # Update threshold if variance is higher
+            if variance > max_variance:
+                max_variance = variance
+                t_hold = t
+
+        # Apply threshold to create binary image
+        binary_img = gray_array > t_hold
+        binary_array = binary_img.astype('uint8') * 255
+        binary_image = Image.fromarray(binary_array)
+
+        # Save the binary image
+        binary_save_path = os.path.join(timestamped_folder_path,
+                                        f"otsu_threshold_{t_hold}_{is_stretched}_{is_equalised}_{channel}_{image_name}").replace(
+            '\\', '/')
+        binary_image.save(binary_save_path)
+
+        if state=="o":
+            binary_image.show()
+        # Display t_hold on histogram
+        axis.axvline(x=t_hold, color='k', linestyle='--', alpha=0.7,
+                     label=f'Otsu Threshold: {t_hold}')
+        axis.legend()
 
 
 
