@@ -1,8 +1,8 @@
 import os
-import tkinter as tk #GUI window
-from tkinter import ttk #input fields
-from tkinter import filedialog as fd #file open
-from tkinter.messagebox import showinfo #info box
+import tkinter as tk  # GUI window
+from tkinter import ttk  # input fields
+from tkinter import filedialog as fd  # file open
+from tkinter.messagebox import showinfo  # info box
 from PIL import Image
 import cv2
 import numpy as np
@@ -14,36 +14,35 @@ import math
 import itertools
 from collections.abc import Iterable
 
-
 window = tk.Tk()
 window.config(background="#e7e7e7")
 window.geometry("1000x800")
 window.resizable(False, False)
 window.title("Program zdjeciowy")
 
-
 image_name = ""
 image_location = ""
-#threshold = 0  # zmienia binaryzacje, mniej = wiecej bialego
+# threshold = 0  # zmienia binaryzacje, mniej = wiecej bialego
 image = []
-state="o"
+state = "o"
 stretch = tk.BooleanVar()
 stretch.set(False)
-equalise=tk.BooleanVar()
+equalise = tk.BooleanVar()
 equalise.set(False)
-otsu=tk.BooleanVar()
+otsu = tk.BooleanVar()
 otsu.set(False)
+
+
 # image.show()
 
 
 # mono_image = Image.fromarray(binary_array);  nie dziala, binary array: signed, PIL potrzebuje unsigned
 
 
-
-def select_file(): #wybiera plik (zdjecie)
+def select_file():  # wybiera plik (zdjecie)
     kill_UI()
     global dataframe, filename, image_location, image_name, image, timestamped_folder_path
-    filetypes =(
+    filetypes = (
         ('jpg files', '*.jpg'),
         ('All files', '*.*'))
     filename = fd.askopenfilename(
@@ -68,7 +67,7 @@ def select_file(): #wybiera plik (zdjecie)
             showinfo(title="Blad", message=f"{e}")
 
 
-def get_thresh(): #wpisywanie progu dla binaryzacji
+def get_thresh():  # wpisywanie progu dla binaryzacji
 
     global threshold
     kill_UI()
@@ -90,7 +89,6 @@ def get_thresh(): #wpisywanie progu dla binaryzacji
     )
     info_button.place(x=250, y=400)
 
-
     submit_button = ttk.Button(
         window,
         text="Dalej",
@@ -102,7 +100,7 @@ def get_thresh(): #wpisywanie progu dla binaryzacji
     rat.trace_add("write", lambda *args: validate_thresh(rat, feedback4, submit_button))
 
 
-def validate_thresh(rat, feedback4, submit_button): #walidacja tego progu
+def validate_thresh(rat, feedback4, submit_button):  # walidacja tego progu
     global threshold
     val = rat.get().strip()
 
@@ -115,23 +113,19 @@ def validate_thresh(rat, feedback4, submit_button): #walidacja tego progu
         submit_button.config(state="disabled")
 
 
-
-
-
-
-
-def make_images(): #przyciski
+def make_images():  # przyciski
     kill_UI()
-    left_col=100
-    right_col=500
-    mid_col=300
-    label1 = ttk.Label(window, text="Pliki zostaną zapisany w folderze: {}".format(image_location), background="#e7e7e7")
+    left_col = 100
+    right_col = 500
+    mid_col = 300
+    label1 = ttk.Label(window, text="Pliki zostaną zapisany w folderze: {}".format(image_location),
+                       background="#e7e7e7")
     label1.place(x=mid_col, y=20)
 
-    show_button = ttk.Button(window, text="pokaz obraz", width=20, command= lambda: image.show())
+    show_button = ttk.Button(window, text="pokaz obraz", width=20, command=lambda: image.show())
     show_button.place(x=right_col, y=50)
 
-    stretching_checkbox = ttk.Checkbutton(window,text="Rozciagniecie histogramu", variable=stretch)
+    stretching_checkbox = ttk.Checkbutton(window, text="Rozciagniecie histogramu", variable=stretch)
     stretching_checkbox.place(x=left_col, y=100)
 
     equalisation_checkbox = ttk.Checkbutton(window, text="wyrownanie histogramu", variable=equalise)
@@ -140,55 +134,50 @@ def make_images(): #przyciski
     otsu_checkbox = ttk.Checkbutton(window, text="metoda Otsu", variable=otsu)
     otsu_checkbox.place(x=right_col, y=100)
 
-    bin_normal_button = ttk.Button(window, text="binaryzacja srednia", width=20, command= lambda: binarize_image())
+    bin_normal_button = ttk.Button(window, text="binaryzacja srednia", width=20, command=lambda: binarize_image())
     bin_normal_button.place(x=left_col, y=200)
 
-    bin_red_button = ttk.Button(window, text="binaryzacja czerwona ", width=20, command= lambda: binarize_image('r'))
+    bin_red_button = ttk.Button(window, text="binaryzacja czerwona ", width=20, command=lambda: binarize_image('r'))
     bin_red_button.place(x=left_col, y=250)
 
-    bin_green_button = ttk.Button(window, text="binaryzacja zielona", width=20, command= lambda: binarize_image('g'))
+    bin_green_button = ttk.Button(window, text="binaryzacja zielona", width=20, command=lambda: binarize_image('g'))
     bin_green_button.place(x=left_col, y=300)
 
-    bin_blue_button = ttk.Button(window, text="binaryzacja niebieska", width=20, command= lambda: binarize_image('b'))
+    bin_blue_button = ttk.Button(window, text="binaryzacja niebieska", width=20, command=lambda: binarize_image('b'))
     bin_blue_button.place(x=left_col, y=350)
 
-    bin_other_button=ttk.Button(window, text="inne", width=20, command= lambda: (kill_UI(), other_bins_window()))
+    bin_other_button = ttk.Button(window, text="inne", width=20, command=lambda: (kill_UI(), other_bins_window()))
     bin_other_button.place(x=left_col, y=400)
 
-    hist_all_button = ttk.Button(window, text="sredni histogram", width=20, command= lambda: create_histogram())
+    hist_all_button = ttk.Button(window, text="sredni histogram", width=20, command=lambda: create_histogram())
     hist_all_button.place(x=right_col, y=200)
 
-    hist_red_button = ttk.Button(window, text="czerwony histogram ", width=20, command= lambda: create_histogram('r'))
+    hist_red_button = ttk.Button(window, text="czerwony histogram ", width=20, command=lambda: create_histogram('r'))
     hist_red_button.place(x=right_col, y=250)
 
-    hist_green_button = ttk.Button(window, text="zielony histogram", width=20, command= lambda: create_histogram('g'))
+    hist_green_button = ttk.Button(window, text="zielony histogram", width=20, command=lambda: create_histogram('g'))
     hist_green_button.place(x=right_col, y=300)
 
-    hist_blue_button = ttk.Button(window, text="niebieski histogram", width=20, command= lambda: create_histogram('b'))
+    hist_blue_button = ttk.Button(window, text="niebieski histogram", width=20, command=lambda: create_histogram('b'))
     hist_blue_button.place(x=right_col, y=350)
 
-    hist_gray_button = ttk.Button(window, text="szary histogram", width=20, command= lambda: create_histogram('average'))
+    hist_gray_button = ttk.Button(window, text="szary histogram", width=20, command=lambda: create_histogram('average'))
     hist_gray_button.place(x=right_col, y=400)
 
-
-
-
-
-    bin_full_button = ttk.Button(window, text="wszystkie binaryzacje", width=20, command= lambda: all_bins())
+    bin_full_button = ttk.Button(window, text="wszystkie binaryzacje", width=20, command=lambda: all_bins())
     bin_full_button.place(x=left_col, y=550)
 
-    hist_full_button = ttk.Button(window, text="wszystkie histogramy", width=20, command= lambda: all_hists())
+    hist_full_button = ttk.Button(window, text="wszystkie histogramy", width=20, command=lambda: all_hists())
     hist_full_button.place(x=right_col, y=550)
 
-    all_button = ttk.Button(window, text="wszystko", width=20, command= lambda: all_everything())
+    all_button = ttk.Button(window, text="wszystko", width=20, command=lambda: all_everything())
     all_button.place(x=mid_col, y=600)
 
     close_button = ttk.Button(window, text="Zamknij okienko", width=20, command=window.destroy)
     close_button.place(x=left_col, y=700)
 
-    restart_button = ttk.Button(window, text="zacznij od nowa", width=20, command= lambda: select_file())
+    restart_button = ttk.Button(window, text="zacznij od nowa", width=20, command=lambda: select_file())
     restart_button.place(x=right_col, y=700)
-
 
     info_button = ttk.Button(
         window,
@@ -203,16 +192,6 @@ def make_images(): #przyciski
         )
     )
     info_button.place(x=mid_col, y=650)
-
-
-
-
-
-
-
-
-
-
 
 
 def other_bins_window():
@@ -242,44 +221,25 @@ def other_bins_window():
     feedback_lc_tresh = ttk.Label(window, text="", background="#e7e7e7")
     feedback_lc_tresh.place(x=450, y=80)
 
-
-
     # Submit button
-    brensen_button = ttk.Button(window,text="Brensen",state="disabled",command=lambda: brensen())
+    brensen_button = ttk.Button(window, text="Brensen", state="disabled", command=lambda: brensen())
     brensen_button.place(x=700, y=50)
 
-
-
-
-
-    niblack_button = ttk.Button(window, text="niblack", width=20, command= lambda: niblack())
+    niblack_button = ttk.Button(window, text="niblack", width=20, command=lambda: niblack())
     niblack_button.place(x=300, y=200)
 
-    sauvola_button = ttk.Button(window, text="sauvola", width=20, command= lambda: sauvola())
+    sauvola_button = ttk.Button(window, text="sauvola", width=20, command=lambda: sauvola())
     sauvola_button.place(x=300, y=400)
-
-
-
-
-
 
     # Set up validation
     sq_size_var.trace_add("write",
                           lambda *args: validate_sq_size(sq_size_var, feedback_sq_size, brensen_button, lc_tresh_var))
     lc_tresh_var.trace_add("write",
-                           lambda *args: validate_lc_tresh(lc_tresh_var, feedback_lc_tresh, brensen_button, sq_size_var))
-
-
-
+                           lambda *args: validate_lc_tresh(lc_tresh_var, feedback_lc_tresh, brensen_button,
+                                                           sq_size_var))
 
     back_button = ttk.Button(window, text="back", width=20, command=lambda: make_images())
     back_button.place(x=400, y=600)
-
-
-
-
-
-
 
 
 def validate_sq_size(sq_size_var, feedback, submit_button, lc_tresh_var):
@@ -372,8 +332,8 @@ def mean_std(image, w):
 
 # Global variables
 window_size = 15  # Size of the sliding window
-k_value = 0.2     # Niblack and Sauvola constant
-r_value = None    # Sauvola dynamic range (set to None for automatic calculation)
+k_value = 0.2  # Niblack and Sauvola constant
+r_value = None  # Sauvola dynamic range (set to None for automatic calculation)
 
 
 def niblack():
@@ -465,17 +425,7 @@ def sauvola():
     return result
 
 
-
-
-
-
-
-
-
-
-
-
-def all_bins(): #wszystkie binaryzacje, +timer
+def all_bins():  # wszystkie binaryzacje, +timer
 
     start_time = time.time()
     global state
@@ -489,7 +439,8 @@ def all_bins(): #wszystkie binaryzacje, +timer
     elapsed_time = time.time() - start_time
     showinfo(title="Czas", message=f"Ukończono w ciągu {elapsed_time:.4f} sekund")
 
-def all_hists(): #wszystkie histogramy, +timer
+
+def all_hists():  # wszystkie histogramy, +timer
     start_time = time.time()
     global state
     state = "all"
@@ -503,10 +454,11 @@ def all_hists(): #wszystkie histogramy, +timer
     elapsed_time = time.time() - start_time
     showinfo(title="Czas", message=f"Ukończono w ciągu {elapsed_time:.4f} sekund")
 
-def all_everything(): #binaryzacje + histogramy, +timer
+
+def all_everything():  # binaryzacje + histogramy, +timer
     start_time = time.time()
     global state
-    state="all"
+    state = "all"
 
     binarize_image()
     binarize_image("r")
@@ -520,19 +472,17 @@ def all_everything(): #binaryzacje + histogramy, +timer
     state = "o"
     elapsed_time = time.time() - start_time
     showinfo(title="Czas", message=f"Ukończono w ciągu {elapsed_time:.4f} sekund")
-
 
 
 #########################################################################################################
 def equalise_single_channel(image):
-
     # Flatten the image into a 1D array
     flat = image.flatten()
     hist, bins = np.histogram(flat, bins=256, range=[0, 256])
 
     # Normalize the histogram to get the probability distribution function (PDF)
     pdf = hist / flat.size
-    
+
     # Compute the cumulative distribution function (CDF)
     cdf = np.cumsum(pdf)
 
@@ -547,7 +497,6 @@ def equalise_single_channel(image):
 
 
 def equalise_histogram(image):
-
     # Check if image is grayscale or RGB
     if len(image.shape) == 2:
         return equalise_single_channel(image)
@@ -557,21 +506,22 @@ def equalise_histogram(image):
         for i in range(3):
             result[:, :, i] = equalise_single_channel(image[:, :, i])
         return result
+
+
 ###########################################################################################################
-
-
 
 
 #########################################################################################################
 def binarize_image(method='average'):
-    #global image, image_location, image_name, threshold,state
+    # global image, image_location, image_name, threshold,state
 
     if method == 'average':  # binaruzje srednia (?)
         grayscale_image = image.convert('L')
         grayscale_array = np.array(grayscale_image)
         binary_array = (grayscale_array > threshold) * 255
         result_image = Image.fromarray(binary_array.astype(np.uint8))
-        new_file_path = os.path.join(timestamped_folder_path, f"{threshold}__BlackAndWhite_{image_name}").replace('\\', '/')
+        new_file_path = os.path.join(timestamped_folder_path, f"{threshold}__BlackAndWhite_{image_name}").replace('\\',
+                                                                                                                  '/')
         os.makedirs(os.path.dirname(new_file_path), exist_ok=True)
 
 
@@ -589,16 +539,10 @@ def binarize_image(method='average'):
     else:
         raise ValueError(f"metody: 'average', 'r', 'g', 'b'")
 
-    if state=="o":
+    if state == "o":
         result_image.show()
     result_image.save(new_file_path)
     return result_image
-
-
-
-
-
-
 
 
 def brensen():
@@ -636,19 +580,6 @@ def brensen():
     return result
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 def create_histogram(channel='all'):
     global image, image_location, image_name, state
 
@@ -665,7 +596,8 @@ def create_histogram(channel='all'):
         if stretch.get():
             stretched_array = np.zeros_like(rgb_array)
             for i in range(3):  # Process each RGB channel
-                channel_data = rgb_array[:, :, i] #1sze : wybiera wszystkie wiersze, 2gie- kolumne, 3cie, pokazuje R,G, czy B
+                channel_data = rgb_array[:, :,
+                               i]  # 1sze : wybiera wszystkie wiersze, 2gie- kolumne, 3cie, pokazuje R,G, czy B
                 vmin = np.min(channel_data)
                 vmax = np.max(channel_data)
                 imax = 255
@@ -694,7 +626,7 @@ def create_histogram(channel='all'):
         rgb_image = image.convert('RGB')
         rgb_array = np.array(rgb_image)
 
-        #get specific channel
+        # get specific channel
         channel_index = {'r': 0, 'g': 1, 'b': 2}[channel]
         channel_data = rgb_array[:, :, channel_index].copy()
         flat_channel_data = channel_data.flatten()
@@ -743,18 +675,16 @@ def create_histogram(channel='all'):
 
         processed_image = Image.fromarray(gray_array.astype('uint8'), 'L')
 
-
-
     axis.set_xlabel('Wartosc pikseli')
     axis.set_ylabel('czestosc')
     axis.set_xlim([0, 255])
     axis.grid(True, alpha=0.3)
 
-
-    is_stretched="Rozciagniete"*int(stretch.get())
-    is_equalised="Wyrownane"*int(equalise.get())
+    is_stretched = "Rozciagniete" * int(stretch.get())
+    is_equalised = "Wyrownane" * int(equalise.get())
     plt.tight_layout()
-    save_path = os.path.join(timestamped_folder_path, f"histogram_{is_stretched}_{is_equalised}_{channel}_{image_name}").replace('\\', '/')
+    save_path = os.path.join(timestamped_folder_path,
+                             f"histogram_{is_stretched}_{is_equalised}_{channel}_{image_name}").replace('\\', '/')
 
     # Create directories if they don't exist
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
@@ -813,17 +743,14 @@ def create_histogram(channel='all'):
             '\\', '/')
         binary_image.save(binary_save_path)
 
-        if state=="o":
+        if state == "o":
             binary_image.show()
         # Display t_hold on histogram
         axis.axvline(x=t_hold, color='k', linestyle='--', alpha=0.7,
                      label=f'Otsu Threshold: {t_hold}')
         axis.legend()
 
-
-
     return figure, axis
-
 
 
 def kill_UI():
@@ -843,12 +770,10 @@ def HELP_window(message):
     close_button.pack(pady=10)
 
 
-
-
-open_button = ttk.Button  (
+open_button = ttk.Button(
     window,
     text='Otworz plik',
-    command=select_file   )
+    command=select_file)
 open_button.place(x=250, y=400)
 
 window.mainloop()
