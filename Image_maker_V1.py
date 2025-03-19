@@ -10,6 +10,10 @@ from matplotlib import pyplot as plt
 import time
 from datetime import datetime
 from scipy.ndimage import minimum_filter, maximum_filter
+import math
+import itertools
+from collections.abc import Iterable
+
 
 window = tk.Tk()
 window.config(background="#e7e7e7")
@@ -65,6 +69,7 @@ def select_file(): #wybiera plik (zdjecie)
 
 
 def get_thresh(): #wpisywanie progu dla binaryzacji
+
     global threshold
     kill_UI()
 
@@ -167,6 +172,8 @@ def make_images(): #przyciski
 
 
 
+
+
     bin_full_button = ttk.Button(window, text="wszystkie binaryzacje", width=20, command= lambda: all_bins())
     bin_full_button.place(x=left_col, y=550)
 
@@ -241,6 +248,21 @@ def other_bins_window():
     brensen_button = ttk.Button(window,text="Brensen",state="disabled",command=lambda: brensen())
     brensen_button.place(x=700, y=50)
 
+
+
+
+
+    niblack_button = ttk.Button(window, text="niblack", width=20, command= lambda: niblack())
+    niblack_button.place(x=300, y=200)
+
+    sauvola_button = ttk.Button(window, text="sauvola", width=20, command= lambda: sauvola())
+    sauvola_button.place(x=300, y=400)
+
+
+
+
+
+
     # Set up validation
     sq_size_var.trace_add("write",
                           lambda *args: validate_sq_size(sq_size_var, feedback_sq_size, brensen_button, lc_tresh_var))
@@ -309,6 +331,142 @@ def is_valid_sq_size(val):
         return 3 <= num_val <= 101 and num_val % 2 == 1
     except ValueError:
         return False
+
+
+def _correlate_sparse(image, kernel_shape, kernel_indices, kernel_values):
+    idx, val = kernel_indices[0], kernel_values[0]
+    if tuple(idx) != (0,) * image.ndim:
+        raise RuntimeError("Unexpected initial index in kernel_indices")
+    out = image[tuple(slice(None, s) for s in image.shape)][:kernel_shape[0], :kernel_shape[1]].copy()
+    for idx, val in zip(kernel_indices[1:], kernel_values[1:]):
+        out += image[tuple(slice(i, i + s) for i, s in zip(idx, kernel_shape))] * val
+    return out
+
+
+def mean_std(image, w):
+    if not isinstance(w, Iterable):
+        w = (w,) * image.ndim
+
+    pad_width = tuple((k // 2 + 1, k // 2) for k in w)
+    padded = np.pad(image.astype(np.float64, copy=False), pad_width, mode='reflect')
+
+    integral = np.cumsum(np.cumsum(padded, axis=0), axis=1)
+    padded_sq = padded * padded
+    integral_sq = np.cumsum(np.cumsum(padded_sq, axis=0), axis=1)
+
+    kernel_indices = list(itertools.product(*tuple([(0, _w) for _w in w])))
+    kernel_values = [(-1) ** (image.ndim % 2 != np.sum(indices) % 2) for indices in kernel_indices]
+
+    total_window_size = math.prod(w)
+    kernel_shape = tuple(_w + 1 for _w in w)
+
+    m = _correlate_sparse(integral, kernel_shape, kernel_indices, kernel_values)
+    m = m.astype(np.float64, copy=False) / total_window_size
+
+    g2 = _correlate_sparse(integral_sq, kernel_shape, kernel_indices, kernel_values)
+    g2 = g2.astype(np.float64, copy=False) / total_window_size
+
+    s = np.sqrt(np.clip(g2 - m * m, 0, None))
+    return m, s
+
+
+# Global variables
+window_size = 15  # Size of the sliding window
+k_value = 0.2     # Niblack and Sauvola constant
+r_value = None    # Sauvola dynamic range (set to None for automatic calculation)
+
+
+def niblack():
+    method = "niblack"
+    global image, threshold, window_size, k_value
+
+    # Convert image to grayscale and then to a NumPy array
+    img_array = np.array(image.convert('L'))
+
+    # Calculate mean and standard deviation
+    m, s = mean_std(img_array, window_size)
+
+    # Check and fix dimensions if needed
+    if m.shape != img_array.shape:
+        print(f"Warning: Reshaping threshold from {m.shape} to {img_array.shape}")
+        # Option 1: Resize the threshold to match image dimensions
+        from scipy.ndimage import zoom
+        zoom_factor = (img_array.shape[0] / m.shape[0], img_array.shape[1] / m.shape[1])
+        m = zoom(m, zoom_factor, order=1)
+        s = zoom(s, zoom_factor, order=1)
+
+    # Compute threshold (T = m(x,y) - k * s(x,y))
+    threshold_niblack = m - k_value * s
+
+    # Apply thresholding
+    output = np.where(img_array < threshold_niblack, 0, 255)
+
+    # Ensure the output array is of type uint8
+    output = output.astype(np.uint8)
+
+    # Convert back to PIL Image and save
+    result = Image.fromarray(output)
+    new_file_path = os.path.join(timestamped_folder_path, f"{k_value}__{method}_{image_name}").replace('\\', '/')
+    os.makedirs(os.path.dirname(new_file_path), exist_ok=True)
+    result.save(new_file_path)
+    result.show()
+
+    return result
+
+
+def sauvola():
+    method = "sauvola"
+    global image, threshold, window_size, k_value, r_value
+
+    # Convert image to grayscale and then to a NumPy array
+    img_array = np.array(image.convert('L'))
+
+    # Calculate mean and standard deviation using scipy's uniform_filter
+    from scipy.ndimage import uniform_filter
+
+    # Ensure window_size is odd
+    if isinstance(window_size, int):
+        w_size = window_size
+    else:
+        w_size = window_size[0] if hasattr(window_size, '__getitem__') else window_size
+
+    # Calculate local mean
+    mean = uniform_filter(img_array.astype(float), size=w_size, mode='reflect')
+
+    # Calculate local squared mean
+    squared = uniform_filter(img_array.astype(float) ** 2, size=w_size, mode='reflect')
+
+    # Calculate local std dev
+    variance = squared - mean ** 2
+    # Handle numeric errors
+    variance = np.maximum(variance, 0)
+    std_dev = np.sqrt(variance)
+
+    # If r is not specified, use default calculation
+    if r_value is None:
+        r_value = 0.5 * (np.max(img_array) - np.min(img_array))
+
+    # Compute threshold (T = m(x,y) * (1 + k * ((s(x,y) / R) - 1)))
+    threshold_sauvola = mean * (1 + k_value * ((std_dev / r_value) - 1))
+
+    # Apply thresholding
+    output = np.where(img_array < threshold_sauvola, 0, 255)
+
+    # Ensure the output array is of type uint8
+    output = output.astype(np.uint8)
+
+    # Convert back to PIL Image and save
+    result = Image.fromarray(output)
+    new_file_path = os.path.join(timestamped_folder_path, f"{k_value}__{method}_{image_name}").replace('\\', '/')
+    os.makedirs(os.path.dirname(new_file_path), exist_ok=True)
+    result.save(new_file_path)
+    result.show()
+
+    return result
+
+
+
+
 
 
 
