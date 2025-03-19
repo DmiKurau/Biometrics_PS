@@ -9,7 +9,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 import time
 from datetime import datetime
-
+from scipy.ndimage import minimum_filter, maximum_filter
 
 window = tk.Tk()
 window.config(background="#e7e7e7")
@@ -37,6 +37,7 @@ otsu.set(False)
 
 
 def select_file(): #wybiera plik (zdjecie)
+    kill_UI()
     global dataframe, filename, image_location, image_name, image, timestamped_folder_path
     filetypes =(
         ('jpg files', '*.jpg'),
@@ -48,7 +49,7 @@ def select_file(): #wybiera plik (zdjecie)
     if filename:
         try:
             image_location, image_name = os.path.split(filename)
-            full_path = os.path.join(image_location, image_name)
+            full_path = os.path.join(image_location, image_name).replace('\\', '/')
             image = Image.open(full_path)
             showinfo(title="plik otwarty", message=f"otwarto plik: {filename}")
             timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
@@ -115,6 +116,7 @@ def validate_thresh(rat, feedback4, submit_button): #walidacja tego progu
 
 
 def make_images(): #przyciski
+    kill_UI()
     left_col=100
     right_col=500
     mid_col=300
@@ -144,6 +146,9 @@ def make_images(): #przyciski
 
     bin_blue_button = ttk.Button(window, text="binaryzacja niebieska", width=20, command= lambda: binarize_image('b'))
     bin_blue_button.place(x=left_col, y=350)
+
+    bin_other_button=ttk.Button(window, text="inne", width=20, command= lambda: (kill_UI(), other_bins_window()))
+    bin_other_button.place(x=left_col, y=400)
 
     hist_all_button = ttk.Button(window, text="sredni histogram", width=20, command= lambda: create_histogram())
     hist_all_button.place(x=right_col, y=200)
@@ -191,6 +196,122 @@ def make_images(): #przyciski
         )
     )
     info_button.place(x=mid_col, y=650)
+
+
+
+
+
+
+
+
+
+
+
+
+def other_bins_window():
+    global sq_size, lc_tresh
+
+    sq_size_var = tk.StringVar()
+    lc_tresh_var = tk.StringVar()
+
+    # Create labels
+    label_sq_size = ttk.Label(window, text="Rozmiar kwadratu:", background="#e7e7e7")
+    label_sq_size.place(x=50, y=50)
+
+    label_lc_tresh = ttk.Label(window, text="Próg niskiego kontrastu:", background="#e7e7e7")
+    label_lc_tresh.place(x=250, y=50)
+
+    # Create entry fields
+    entry_sq_size = ttk.Entry(window, textvariable=sq_size_var, width=10)
+    entry_sq_size.place(x=150, y=50)
+
+    entry_lc_tresh = ttk.Entry(window, textvariable=lc_tresh_var, width=10)
+    entry_lc_tresh.place(x=450, y=50)
+
+    # Create feedback labels
+    feedback_sq_size = ttk.Label(window, text="", background="#e7e7e7")
+    feedback_sq_size.place(x=150, y=80)
+
+    feedback_lc_tresh = ttk.Label(window, text="", background="#e7e7e7")
+    feedback_lc_tresh.place(x=450, y=80)
+
+
+
+    # Submit button
+    brensen_button = ttk.Button(window,text="Brensen",state="disabled",command=lambda: brensen())
+    brensen_button.place(x=700, y=50)
+
+    # Set up validation
+    sq_size_var.trace_add("write",
+                          lambda *args: validate_sq_size(sq_size_var, feedback_sq_size, brensen_button, lc_tresh_var))
+    lc_tresh_var.trace_add("write",
+                           lambda *args: validate_lc_tresh(lc_tresh_var, feedback_lc_tresh, brensen_button, sq_size_var))
+
+
+
+
+    back_button = ttk.Button(window, text="back", width=20, command=lambda: make_images())
+    back_button.place(x=400, y=600)
+
+
+
+
+
+
+
+
+def validate_sq_size(sq_size_var, feedback, submit_button, lc_tresh_var):
+    global sq_size
+    val = sq_size_var.get().strip()
+
+    try:
+        num_val = int(val)
+        if 3 <= num_val <= 101 and num_val % 2 == 1:
+            sq_size = num_val
+            feedback.config(text="Git", foreground="green")
+            # Check if both inputs are valid to enable submit button
+            if is_valid_lc_tresh(lc_tresh_var.get().strip()):
+                submit_button.config(state="normal")
+        else:
+            feedback.config(text="Invalid\n\n\n(musi być liczbą nieparzystą pomiędzy 3-101)", foreground="red")
+            submit_button.config(state="disabled")
+    except ValueError:
+        feedback.config(text="Invalid\n\n\n(musi być liczbą całkowitą)", foreground="red")
+        submit_button.config(state="disabled")
+
+
+def validate_lc_tresh(lc_tresh_var, feedback, submit_button, sq_size_var):
+    global lc_tresh
+    val = lc_tresh_var.get().strip()
+
+    if is_valid_lc_tresh(val):
+        lc_tresh = int(val)
+        feedback.config(text="Git", foreground="green")
+        # Check if both inputs are valid to enable submit button
+        if is_valid_sq_size(sq_size_var.get().strip()):
+            submit_button.config(state="normal")
+    else:
+        feedback.config(text="Invalid\n\n\n(wartości tylko od 0 do 255)", foreground="red")
+        submit_button.config(state="disabled")
+
+
+def is_valid_lc_tresh(val):
+    try:
+        num_val = int(val)
+        return 0 <= num_val <= 255
+    except ValueError:
+        return False
+
+
+def is_valid_sq_size(val):
+    try:
+        num_val = int(val)
+        return 3 <= num_val <= 101 and num_val % 2 == 1
+    except ValueError:
+        return False
+
+
+
 
 
 
@@ -253,7 +374,7 @@ def equalise_single_channel(image):
 
     # Normalize the histogram to get the probability distribution function (PDF)
     pdf = hist / flat.size
-
+    
     # Compute the cumulative distribution function (CDF)
     cdf = np.cumsum(pdf)
 
@@ -285,7 +406,7 @@ def equalise_histogram(image):
 
 #########################################################################################################
 def binarize_image(method='average'):
-    global image, image_location, image_name, threshold,state
+    #global image, image_location, image_name, threshold,state
 
     if method == 'average':  # binaruzje srednia (?)
         grayscale_image = image.convert('L')
@@ -314,6 +435,60 @@ def binarize_image(method='average'):
         result_image.show()
     result_image.save(new_file_path)
     return result_image
+
+
+
+
+
+
+
+
+def brensen():
+    method = "brensen"
+    global threshold, lc_tresh, sq_size
+
+    # Convert image to grayscale and then to a NumPy array
+    img_array = np.array(image.convert('L'))
+
+    # Compute min and max over the sliding window
+    z_low = minimum_filter(img_array, size=sq_size, mode='reflect')
+    z_high = maximum_filter(img_array, size=sq_size, mode='reflect')
+
+    # Compute threshold
+    threshold_bern = (z_low + z_high) // 2
+
+    # Check contrast
+    low_contrast_mask = (z_high - z_low) < lc_tresh
+
+    # Apply global threshold to low-contrast regions
+    global_threshold = threshold
+    output = np.where(low_contrast_mask, np.where(img_array < global_threshold, 0, 255),
+                      np.where(img_array < threshold_bern, 0, 255))
+
+    # Ensure the output array is of type uint8
+    output = output.astype(np.uint8)
+
+    # Convert back to PIL Image and save
+    result = Image.fromarray(output)
+    new_file_path = os.path.join(timestamped_folder_path, f"{lc_tresh}__{method}_{image_name}").replace('\\', '/')
+    os.makedirs(os.path.dirname(new_file_path), exist_ok=True)
+    result.save(new_file_path)
+    result.show()
+
+    return result
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 def create_histogram(channel='all'):
