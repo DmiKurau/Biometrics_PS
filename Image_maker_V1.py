@@ -31,6 +31,12 @@ equalise = tk.BooleanVar()
 equalise.set(False)
 otsu = tk.BooleanVar()
 otsu.set(False)
+window_size_var = tk.StringVar(value="")
+k_value_var = tk.StringVar(value="")
+r_value_var = tk.StringVar(value="")
+r_weight = tk.StringVar()
+g_weight = tk.StringVar()
+b_weight = tk.StringVar()
 
 
 # image.show()
@@ -200,6 +206,29 @@ def other_bins_window():
     sq_size_var = tk.StringVar()
     lc_tresh_var = tk.StringVar()
 
+    # K Value input
+    label_k_val = ttk.Label(window, text="wartosc k:", background="#e7e7e7")
+    label_k_val.place(x=50, y=150)
+
+    entry_k_value = ttk.Entry(window, textvariable=k_value_var, width=10)
+    entry_k_value.place(x=150, y=150)
+
+    feedback_k_value = ttk.Label(window, text="", background="#e7e7e7")
+    feedback_k_value.place(x=150, y=180)
+
+    # R Value input (for Sauvola only)
+
+    label_r_val = ttk.Label(window, text="wartosc k:", background="#e7e7e7")
+    label_r_val.place(x=250, y=150)
+
+    entry_r_value = ttk.Entry(window, textvariable=r_value_var, width=10)
+    entry_r_value.place(x=450, y=150)
+
+    feedback_r_value = ttk.Label(window, text="", background="#e7e7e7")
+    feedback_r_value.place(x=450, y=180)
+
+
+
     # Create labels
     label_sq_size = ttk.Label(window, text="Rozmiar kwadratu:", background="#e7e7e7")
     label_sq_size.place(x=50, y=50)
@@ -221,19 +250,65 @@ def other_bins_window():
     feedback_lc_tresh = ttk.Label(window, text="", background="#e7e7e7")
     feedback_lc_tresh.place(x=450, y=80)
 
+    label_lc_tresh = ttk.Label(window, text="czerwony", background="#e7e7e7")
+    label_lc_tresh.place(x=150, y=320)
+    label_lc_tresh = ttk.Label(window, text="zielony", background="#e7e7e7")
+    label_lc_tresh.place(x=250, y=320)
+    label_lc_tresh = ttk.Label(window, text="niebieski", background="#e7e7e7")
+    label_lc_tresh.place(x=350, y=320)
+
+    entry_red = ttk.Entry(window, textvariable=r_weight, width=10)
+    entry_red.place(x=150, y=350)
+
+    entry_green = ttk.Entry(window, textvariable=g_weight, width=10)
+    entry_green.place(x=250, y=350)
+
+    entry_blue = ttk.Entry(window, textvariable=b_weight, width=10)
+    entry_blue.place(x=350, y=350)
+
+    weighted_button = ttk.Button(window, text="weighted",state="disabled",  width=20, command=lambda: weighted_rgb_binarization())
+    weighted_button.place(x=700, y=350)
+
+    feedback4 = ttk.Label(window, text="", background="#e7e7e7")
+    feedback4.place(x=700, y=380)
+
+
+
+
+
+
+
+
     # Submit button
-    brensen_button = ttk.Button(window, text="Brensen", state="disabled", command=lambda: brensen())
+    brensen_button = ttk.Button(window, text="Brensen", width=20, state="disabled", command=lambda: brensen())
     brensen_button.place(x=700, y=50)
 
     niblack_button = ttk.Button(window, text="niblack", width=20, command=lambda: niblack())
-    niblack_button.place(x=300, y=200)
+    niblack_button.place(x=700, y=150)
 
     sauvola_button = ttk.Button(window, text="sauvola", width=20, command=lambda: sauvola())
-    sauvola_button.place(x=300, y=400)
+    sauvola_button.place(x=700, y=250)
 
-    # Set up validation
+    def setup_validation_traces():
+        r_weight.trace_add("write", lambda *args: validate_weightsrgb(
+            r_weight, g_weight, b_weight, feedback4, weighted_button))
+        g_weight.trace_add("write", lambda *args: validate_weightsrgb(
+            r_weight, g_weight, b_weight, feedback4, weighted_button))
+        b_weight.trace_add("write", lambda *args: validate_weightsrgb(
+            r_weight, g_weight, b_weight, feedback4, weighted_button))
+
+    setup_validation_traces()
+
+
+
+    k_value_var.trace_add("write", lambda *args: validate_k_value(
+        k_value_var, feedback_k_value, niblack_button, sauvola_button, window_size_var, r_value_var))
+    r_value_var.trace_add("write", lambda *args: validate_r_value(
+        r_value_var, feedback_r_value, sauvola_button, window_size_var, k_value_var))
     sq_size_var.trace_add("write",
-                          lambda *args: validate_sq_size(sq_size_var, feedback_sq_size, brensen_button, lc_tresh_var))
+                          lambda *args: validate_sq_size(sq_size_var, feedback_sq_size,
+                                                         brensen_button, niblack_button, sauvola_button,
+                                                         lc_tresh_var, k_value_var, r_value_var))
     lc_tresh_var.trace_add("write",
                            lambda *args: validate_lc_tresh(lc_tresh_var, feedback_lc_tresh, brensen_button,
                                                            sq_size_var))
@@ -242,7 +317,29 @@ def other_bins_window():
     back_button.place(x=400, y=600)
 
 
-def validate_sq_size(sq_size_var, feedback, submit_button, lc_tresh_var):
+
+
+def validate_weightsrgb(r_weight, g_weight, b_weight, feedback4, weighted_button):
+    val1 = r_weight.get().strip()
+    val2 = g_weight.get().strip()
+    val3 = b_weight.get().strip()
+
+    # Fixed the condition to check val2 correctly
+    if (val1.isdigit() and (0 <= int(val1) <= 255)) and \
+       (val2.isdigit() and (0 <= int(val2) <= 255)) and \
+       (val3.isdigit() and (0 <= int(val3) <= 255)):
+        feedback4.config(text="git", foreground="green")
+        weighted_button.config(state="normal")
+    else:
+        feedback4.config(text="Invalid (0-255 tylko)", foreground="red")
+        weighted_button.config(state="disabled")
+
+
+
+
+
+def validate_sq_size(sq_size_var, feedback, brensen_button, niblack_button, sauvola_button, lc_tresh_var, k_value_var,
+                     r_value_var):
     global sq_size
     val = sq_size_var.get().strip()
 
@@ -251,100 +348,49 @@ def validate_sq_size(sq_size_var, feedback, submit_button, lc_tresh_var):
         if 3 <= num_val <= 101 and num_val % 2 == 1:
             sq_size = num_val
             feedback.config(text="Git", foreground="green")
-            # Check if both inputs are valid to enable submit button
+
+            # For Brensen button - check if low contrast threshold is valid
             if is_valid_lc_tresh(lc_tresh_var.get().strip()):
-                submit_button.config(state="normal")
+                brensen_button.config(state="normal")
+            else:
+                brensen_button.config(state="disabled")
+
+            # For Niblack button - check if k value is valid
+            if is_valid_k_value(k_value_var.get().strip()):
+                niblack_button.config(state="normal")
+            else:
+                niblack_button.config(state="disabled")
+
+            # For Sauvola button - check if both k value and r value are valid
+            if is_valid_k_value(k_value_var.get().strip()) and is_valid_r_value(r_value_var.get().strip()):
+                sauvola_button.config(state="normal")
+            else:
+                sauvola_button.config(state="disabled")
         else:
             feedback.config(text="Invalid\n\n\n(musi być liczbą nieparzystą pomiędzy 3-101)", foreground="red")
-            submit_button.config(state="disabled")
+            brensen_button.config(state="disabled")
+            niblack_button.config(state="disabled")
+            sauvola_button.config(state="disabled")
     except ValueError:
         feedback.config(text="Invalid\n\n\n(musi być liczbą całkowitą)", foreground="red")
-        submit_button.config(state="disabled")
+        brensen_button.config(state="disabled")
+        niblack_button.config(state="disabled")
+        sauvola_button.config(state="disabled")
 
 
-def validate_lc_tresh(lc_tresh_var, feedback, submit_button, sq_size_var):
-    global lc_tresh
-    val = lc_tresh_var.get().strip()
-
-    if is_valid_lc_tresh(val):
-        lc_tresh = int(val)
-        feedback.config(text="Git", foreground="green")
-        # Check if both inputs are valid to enable submit button
-        if is_valid_sq_size(sq_size_var.get().strip()):
-            submit_button.config(state="normal")
-    else:
-        feedback.config(text="Invalid\n\n\n(wartości tylko od 0 do 255)", foreground="red")
-        submit_button.config(state="disabled")
 
 
-def is_valid_lc_tresh(val):
-    try:
-        num_val = int(val)
-        return 0 <= num_val <= 255
-    except ValueError:
-        return False
-
-
-def is_valid_sq_size(val):
-    try:
-        num_val = int(val)
-        return 3 <= num_val <= 101 and num_val % 2 == 1
-    except ValueError:
-        return False
-
-
-def _correlate_sparse(image, kernel_shape, kernel_indices, kernel_values):
-    idx, val = kernel_indices[0], kernel_values[0]
-    if tuple(idx) != (0,) * image.ndim:
-        raise RuntimeError("Unexpected initial index in kernel_indices")
-    out = image[tuple(slice(None, s) for s in image.shape)][:kernel_shape[0], :kernel_shape[1]].copy()
-    for idx, val in zip(kernel_indices[1:], kernel_values[1:]):
-        out += image[tuple(slice(i, i + s) for i, s in zip(idx, kernel_shape))] * val
-    return out
-
-
-def mean_std(image, w):
-    if not isinstance(w, Iterable):
-        w = (w,) * image.ndim
-
-    pad_width = tuple((k // 2 + 1, k // 2) for k in w)
-    padded = np.pad(image.astype(np.float64, copy=False), pad_width, mode='reflect')
-
-    integral = np.cumsum(np.cumsum(padded, axis=0), axis=1)
-    padded_sq = padded * padded
-    integral_sq = np.cumsum(np.cumsum(padded_sq, axis=0), axis=1)
-
-    kernel_indices = list(itertools.product(*tuple([(0, _w) for _w in w])))
-    kernel_values = [(-1) ** (image.ndim % 2 != np.sum(indices) % 2) for indices in kernel_indices]
-
-    total_window_size = math.prod(w)
-    kernel_shape = tuple(_w + 1 for _w in w)
-
-    m = _correlate_sparse(integral, kernel_shape, kernel_indices, kernel_values)
-    m = m.astype(np.float64, copy=False) / total_window_size
-
-    g2 = _correlate_sparse(integral_sq, kernel_shape, kernel_indices, kernel_values)
-    g2 = g2.astype(np.float64, copy=False) / total_window_size
-
-    s = np.sqrt(np.clip(g2 - m * m, 0, None))
-    return m, s
-
-
-# Global variables
-window_size = 15  # Size of the sliding window
-k_value = 0.2  # Niblack and Sauvola constant
-r_value = None  # Sauvola dynamic range (set to None for automatic calculation)
 
 
 def niblack():
     method = "niblack"
-    global image, threshold, window_size, k_value
+    global image, threshold, sq_size, k_value
 
     # Convert image to grayscale and then to a NumPy array
     img_array = np.array(image.convert('L'))
 
     # Calculate mean and standard deviation
-    m, s = mean_std(img_array, window_size)
+    m, s = mean_std(img_array, sq_size)
 
     # Check and fix dimensions if needed
     if m.shape != img_array.shape:
@@ -366,7 +412,7 @@ def niblack():
 
     # Convert back to PIL Image and save
     result = Image.fromarray(output)
-    new_file_path = os.path.join(timestamped_folder_path, f"{k_value}__{method}_{image_name}").replace('\\', '/')
+    new_file_path = os.path.join(timestamped_folder_path, f"{k_value}_{sq_size}_{method}_{image_name}").replace('\\', '/')
     os.makedirs(os.path.dirname(new_file_path), exist_ok=True)
     result.save(new_file_path)
     result.show()
@@ -374,9 +420,55 @@ def niblack():
     return result
 
 
+def weighted_rgb_binarization():
+    global image, r_weight, g_weight, b_weight, threshold
+
+    # Convert to RGB if not already
+    rgb_image = image.convert('RGB')
+    rgb_array = np.array(rgb_image)
+
+    # Get individual channels
+    r_channel = rgb_array[:, :, 0].astype(float)
+    g_channel = rgb_array[:, :, 1].astype(float)
+    b_channel = rgb_array[:, :, 2].astype(float)
+
+    # Get weight values as floats (normalized between 0 and 1)
+    r_weight_val = int(r_weight.get()) / 255
+    g_weight_val = int(g_weight.get()) / 255
+    b_weight_val = int(b_weight.get()) / 255
+
+    # Sum of weights for normalization
+    weight_sum = r_weight_val + g_weight_val + b_weight_val
+    if weight_sum == 0:  # Avoid division by zero
+        weight_sum = 1
+
+    # Apply weights to each channel
+    r_weighted = r_channel * r_weight_val
+    g_weighted = g_channel * g_weight_val
+    b_weighted = b_channel * b_weight_val
+
+    # Calculate weighted average
+    weighted_sum = (r_weighted + g_weighted + b_weighted) / weight_sum
+
+    # Apply threshold to the weighted sum
+    final_binary = (weighted_sum > threshold) * 255
+
+    # Convert to image
+    result_image = Image.fromarray(final_binary.astype(np.uint8), mode='L')
+
+
+    new_file_path = os.path.join(timestamped_folder_path, f"{r_weight}_{g_weight}_{b_weight}_'wagi_rgb'_{image_name}").replace('\\', '/')
+    os.makedirs(os.path.dirname(new_file_path), exist_ok=True)
+    result_image.save(new_file_path)
+    result_image.show()
+
+    return result_image
+
+
+
 def sauvola():
     method = "sauvola"
-    global image, threshold, window_size, k_value, r_value
+    global image, threshold, sq_size, k_value, r_value
 
     # Convert image to grayscale and then to a NumPy array
     img_array = np.array(image.convert('L'))
@@ -385,10 +477,10 @@ def sauvola():
     from scipy.ndimage import uniform_filter
 
     # Ensure window_size is odd
-    if isinstance(window_size, int):
-        w_size = window_size
+    if isinstance(sq_size, int):
+        w_size = sq_size
     else:
-        w_size = window_size[0] if hasattr(window_size, '__getitem__') else window_size
+        w_size = sq_size[0] if hasattr(sq_size, '__getitem__') else sq_size
 
     # Calculate local mean
     mean = uniform_filter(img_array.astype(float), size=w_size, mode='reflect')
@@ -417,7 +509,7 @@ def sauvola():
 
     # Convert back to PIL Image and save
     result = Image.fromarray(output)
-    new_file_path = os.path.join(timestamped_folder_path, f"{k_value}__{method}_{image_name}").replace('\\', '/')
+    new_file_path = os.path.join(timestamped_folder_path, f"{k_value}_{r_value}_{sq_size}_{method}_{image_name}").replace('\\', '/')
     os.makedirs(os.path.dirname(new_file_path), exist_ok=True)
     result.save(new_file_path)
     result.show()
@@ -572,7 +664,7 @@ def brensen():
 
     # Convert back to PIL Image and save
     result = Image.fromarray(output)
-    new_file_path = os.path.join(timestamped_folder_path, f"{lc_tresh}__{method}_{image_name}").replace('\\', '/')
+    new_file_path = os.path.join(timestamped_folder_path, f"{lc_tresh}_{sq_size}_{method}_{image_name}").replace('\\', '/')
     os.makedirs(os.path.dirname(new_file_path), exist_ok=True)
     result.save(new_file_path)
     result.show()
@@ -768,6 +860,163 @@ def HELP_window(message):
 
     close_button = ttk.Button(message_window, text="Zamknij", command=message_window.destroy)
     close_button.pack(pady=10)
+
+
+def validate_lc_tresh(lc_tresh_var, feedback, submit_button, sq_size_var):
+    global lc_tresh
+    val = lc_tresh_var.get().strip()
+
+    if is_valid_lc_tresh(val):
+        lc_tresh = int(val)
+        feedback.config(text="Git", foreground="green")
+        # Check if both inputs are valid to enable submit button
+        if is_valid_sq_size(sq_size_var.get().strip()):
+            submit_button.config(state="normal")
+    else:
+        feedback.config(text="Invalid\n\n\n(wartości tylko od 0 do 255)", foreground="red")
+        submit_button.config(state="disabled")
+
+
+def is_valid_lc_tresh(val):
+    try:
+        num_val = int(val)
+        return 0 <= num_val <= 255
+    except ValueError:
+        return False
+
+
+def is_valid_sq_size(val):
+    try:
+        num_val = int(val)
+        return 3 <= num_val <= 101 and num_val % 2 == 1
+    except ValueError:
+        return False
+
+
+def _correlate_sparse(image, kernel_shape, kernel_indices, kernel_values):
+    idx, val = kernel_indices[0], kernel_values[0]
+    if tuple(idx) != (0,) * image.ndim:
+        raise RuntimeError("Unexpected initial index in kernel_indices")
+    out = image[tuple(slice(None, s) for s in image.shape)][:kernel_shape[0], :kernel_shape[1]].copy()
+    for idx, val in zip(kernel_indices[1:], kernel_values[1:]):
+        out += image[tuple(slice(i, i + s) for i, s in zip(idx, kernel_shape))] * val
+    return out
+
+
+def mean_std(image, w):
+    if not isinstance(w, Iterable):
+        w = (w,) * image.ndim
+
+    pad_width = tuple((k // 2 + 1, k // 2) for k in w)
+    padded = np.pad(image.astype(np.float64, copy=False), pad_width, mode='reflect')
+
+    integral = np.cumsum(np.cumsum(padded, axis=0), axis=1)
+    padded_sq = padded * padded
+    integral_sq = np.cumsum(np.cumsum(padded_sq, axis=0), axis=1)
+
+    kernel_indices = list(itertools.product(*tuple([(0, _w) for _w in w])))
+    kernel_values = [(-1) ** (image.ndim % 2 != np.sum(indices) % 2) for indices in kernel_indices]
+
+    total_window_size = math.prod(w)
+    kernel_shape = tuple(_w + 1 for _w in w)
+
+    m = _correlate_sparse(integral, kernel_shape, kernel_indices, kernel_values)
+    m = m.astype(np.float64, copy=False) / total_window_size
+
+    g2 = _correlate_sparse(integral_sq, kernel_shape, kernel_indices, kernel_values)
+    g2 = g2.astype(np.float64, copy=False) / total_window_size
+
+    s = np.sqrt(np.clip(g2 - m * m, 0, None))
+    return m, s
+
+
+def validate_k_value(k_value_var, feedback, niblack_button, sauvola_button, window_size_var, r_value_var):
+    global k_value
+    val = k_value_var.get().strip()
+
+    try:
+        num_val = float(val)
+        if -0.5 <= num_val <= 0.5:
+            k_value = num_val
+            feedback.config(text="git", foreground="green")
+            # Check if other inputs are valid to enable submit button
+            if is_valid_window_size(window_size_var.get().strip()) and is_valid_r_value(r_value_var.get().strip()):
+                niblack_button.config(state="normal")
+                sauvola_button.config(state="normal")
+        else:
+            feedback.config(text="Invalid\n\n(musi byc miedzy -0.5 i 0.5)", foreground="red")
+            niblack_button.config(state="disabled")
+            sauvola_button.config(state="disabled")
+    except ValueError:
+        feedback.config(text="Invalid\n\n(musi byc liczba dziesietna)", foreground="red")
+        niblack_button.config(state="disabled")
+        sauvola_button.config(state="disabled")
+
+
+def validate_r_value(r_value_var, feedback, sauvola_button, window_size_var, k_value_var):
+    global r_value
+    val = r_value_var.get().strip()
+
+    if val.lower() == "none" or val == "":
+        r_value = None
+        feedback.config(text="git", foreground="green")
+        # Check if other inputs are valid to enable sauvola_button
+        if is_valid_window_size(window_size_var.get().strip()) and is_valid_k_value(k_value_var.get().strip()):
+            sauvola_button.config(state="normal")
+        else:
+            sauvola_button.config(state="disabled")
+        return True
+
+    try:
+        num_val = float(val)
+        if 1 <= num_val <= 255:
+            r_value = num_val
+            feedback.config(text="git", foreground="green")
+            # Check if other inputs are valid to enable sauvola_button
+            if is_valid_window_size(window_size_var.get().strip()) and is_valid_k_value(k_value_var.get().strip()):
+                sauvola_button.config(state="normal")
+            else:
+                sauvola_button.config(state="disabled")
+            return True
+        else:
+            feedback.config(text="Invalid\n\nmusi byc od 0 do 255)", foreground="red")
+            sauvola_button.config(state="disabled")
+            return False
+    except ValueError:
+        feedback.config(text="Invalid\n\n(musi byc liczba')", foreground="red")
+        sauvola_button.config(state="disabled")
+        return False
+
+# Helper functions to check validity
+def is_valid_window_size(val):
+    try:
+        num_val = int(val)
+        return 3 <= num_val <= 51 and num_val % 2 == 1
+    except ValueError:
+        return False
+
+
+def is_valid_k_value(val):
+    try:
+        num_val = float(val)
+        return -0.5 <= num_val <= 0.5
+    except ValueError:
+        return False
+
+
+def is_valid_r_value(val):
+    if val.lower() == "none" or val == "":
+        return True
+    try:
+        num_val = float(val)
+        return 1 <= num_val <= 255
+    except ValueError:
+        return False
+
+
+
+
+
 
 
 open_button = ttk.Button(
