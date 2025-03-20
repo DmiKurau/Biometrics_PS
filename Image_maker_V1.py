@@ -201,12 +201,12 @@ def make_images():  # przyciski
 
 
 def other_bins_window():
-    global sq_size, lc_tresh
+    global lc_tresh, sq_size_var, lc_tresh_var
 
     sq_size_var = tk.StringVar()
     lc_tresh_var = tk.StringVar()
 
-    # K Value input
+    # K and R value entries (unchanged)
     label_k_val = ttk.Label(window, text="wartosc k:", background="#e7e7e7")
     label_k_val.place(x=50, y=150)
 
@@ -216,9 +216,7 @@ def other_bins_window():
     feedback_k_value = ttk.Label(window, text="", background="#e7e7e7")
     feedback_k_value.place(x=150, y=180)
 
-    # R Value input (for Sauvola only)
-
-    label_r_val = ttk.Label(window, text="wartosc k:", background="#e7e7e7")
+    label_r_val = ttk.Label(window, text="wartosc r:", background="#e7e7e7")
     label_r_val.place(x=250, y=150)
 
     entry_r_value = ttk.Entry(window, textvariable=r_value_var, width=10)
@@ -227,35 +225,29 @@ def other_bins_window():
     feedback_r_value = ttk.Label(window, text="", background="#e7e7e7")
     feedback_r_value.place(x=450, y=180)
 
-
-
-    # Create labels
+    # Sq size + threshold
     label_sq_size = ttk.Label(window, text="Rozmiar kwadratu:", background="#e7e7e7")
     label_sq_size.place(x=50, y=50)
+
+    entry_sq_size = ttk.Entry(window, textvariable=sq_size_var, width=10)
+    entry_sq_size.place(x=150, y=50)
+
+    feedback_sq_size = ttk.Label(window, text="", background="#e7e7e7")
+    feedback_sq_size.place(x=150, y=80)
 
     label_lc_tresh = ttk.Label(window, text="Próg niskiego kontrastu:", background="#e7e7e7")
     label_lc_tresh.place(x=250, y=50)
 
-    # Create entry fields
-    entry_sq_size = ttk.Entry(window, textvariable=sq_size_var, width=10)
-    entry_sq_size.place(x=150, y=50)
-
     entry_lc_tresh = ttk.Entry(window, textvariable=lc_tresh_var, width=10)
     entry_lc_tresh.place(x=450, y=50)
-
-    # Create feedback labels
-    feedback_sq_size = ttk.Label(window, text="", background="#e7e7e7")
-    feedback_sq_size.place(x=150, y=80)
 
     feedback_lc_tresh = ttk.Label(window, text="", background="#e7e7e7")
     feedback_lc_tresh.place(x=450, y=80)
 
-    label_lc_tresh = ttk.Label(window, text="czerwony", background="#e7e7e7")
-    label_lc_tresh.place(x=150, y=320)
-    label_lc_tresh = ttk.Label(window, text="zielony", background="#e7e7e7")
-    label_lc_tresh.place(x=250, y=320)
-    label_lc_tresh = ttk.Label(window, text="niebieski", background="#e7e7e7")
-    label_lc_tresh.place(x=350, y=320)
+    # Weighted RGB
+    ttk.Label(window, text="czerwony", background="#e7e7e7").place(x=150, y=320)
+    ttk.Label(window, text="zielony", background="#e7e7e7").place(x=250, y=320)
+    ttk.Label(window, text="niebieski", background="#e7e7e7").place(x=350, y=320)
 
     entry_red = ttk.Entry(window, textvariable=r_weight, width=10)
     entry_red.place(x=150, y=350)
@@ -266,56 +258,45 @@ def other_bins_window():
     entry_blue = ttk.Entry(window, textvariable=b_weight, width=10)
     entry_blue.place(x=350, y=350)
 
-    weighted_button = ttk.Button(window, text="weighted",state="disabled",  width=20, command=lambda: weighted_rgb_binarization())
-    weighted_button.place(x=700, y=350)
-
     feedback4 = ttk.Label(window, text="", background="#e7e7e7")
     feedback4.place(x=700, y=380)
 
+    weighted_button = ttk.Button(window, text="weighted", state="disabled", width=20, command=lambda: weighted_rgb_binarization())
+    weighted_button.place(x=700, y=350)
 
-
-
-
-
-
-
-    # Submit button
+    # Buttons
     brensen_button = ttk.Button(window, text="Brensen", width=20, state="disabled", command=lambda: brensen())
     brensen_button.place(x=700, y=50)
 
-    niblack_button = ttk.Button(window, text="niblack", width=20, command=lambda: niblack())
+    niblack_button = ttk.Button(window, text="niblack", width=20, state="disabled", command=lambda: niblack())
     niblack_button.place(x=700, y=150)
 
-    sauvola_button = ttk.Button(window, text="sauvola", width=20, command=lambda: sauvola())
+    sauvola_button = ttk.Button(window, text="sauvola", width=20, state="disabled", command=lambda: sauvola())
     sauvola_button.place(x=700, y=250)
 
-    def setup_validation_traces():
-        r_weight.trace_add("write", lambda *args: validate_weightsrgb(
-            r_weight, g_weight, b_weight, feedback4, weighted_button))
-        g_weight.trace_add("write", lambda *args: validate_weightsrgb(
-            r_weight, g_weight, b_weight, feedback4, weighted_button))
-        b_weight.trace_add("write", lambda *args: validate_weightsrgb(
-            r_weight, g_weight, b_weight, feedback4, weighted_button))
+    # Tracing inputs
+    sq_size_var.trace_add("write", lambda *args: validate_sq_size(
+        sq_size_var, feedback_sq_size, brensen_button, niblack_button, sauvola_button,
+        lc_tresh_var, k_value_var, r_value_var))
 
-    setup_validation_traces()
-
-
+    lc_tresh_var.trace_add("write", lambda *args: validate_lc_tresh(
+        lc_tresh_var, feedback_lc_tresh, brensen_button, sq_size_var))
 
     k_value_var.trace_add("write", lambda *args: validate_k_value(
-        k_value_var, feedback_k_value, niblack_button, sauvola_button, window_size_var, r_value_var))
+        k_value_var, feedback_k_value, niblack_button, sauvola_button, sq_size_var, r_value_var))
+
     r_value_var.trace_add("write", lambda *args: validate_r_value(
-        r_value_var, feedback_r_value, sauvola_button, window_size_var, k_value_var))
-    sq_size_var.trace_add("write",
-                          lambda *args: validate_sq_size(sq_size_var, feedback_sq_size,
-                                                         brensen_button, niblack_button, sauvola_button,
-                                                         lc_tresh_var, k_value_var, r_value_var))
-    lc_tresh_var.trace_add("write",
-                           lambda *args: validate_lc_tresh(lc_tresh_var, feedback_lc_tresh, brensen_button,
-                                                           sq_size_var))
+        r_value_var, feedback_r_value, sauvola_button, sq_size_var, k_value_var))
+
+    r_weight.trace_add("write", lambda *args: validate_weightsrgb(
+        r_weight, g_weight, b_weight, feedback4, weighted_button))
+    g_weight.trace_add("write", lambda *args: validate_weightsrgb(
+        r_weight, g_weight, b_weight, feedback4, weighted_button))
+    b_weight.trace_add("write", lambda *args: validate_weightsrgb(
+        r_weight, g_weight, b_weight, feedback4, weighted_button))
 
     back_button = ttk.Button(window, text="back", width=20, command=lambda: make_images())
     back_button.place(x=400, y=600)
-
 
 
 
@@ -338,41 +319,25 @@ def validate_weightsrgb(r_weight, g_weight, b_weight, feedback4, weighted_button
 
 
 
-def validate_sq_size(sq_size_var, feedback, brensen_button, niblack_button, sauvola_button, lc_tresh_var, k_value_var,
-                     r_value_var):
+def validate_sq_size(sq_size_var, feedback, brensen_button, niblack_button, sauvola_button, lc_tresh_var, k_value_var, r_value_var):
     global sq_size
     val = sq_size_var.get().strip()
-
     try:
         num_val = int(val)
         if 3 <= num_val <= 101 and num_val % 2 == 1:
-            sq_size = num_val
+            sq_size = num_val  # Save the **actual int** for later use
             feedback.config(text="Git", foreground="green")
 
-            # For Brensen button - check if low contrast threshold is valid
             if is_valid_lc_tresh(lc_tresh_var.get().strip()):
                 brensen_button.config(state="normal")
-            else:
-                brensen_button.config(state="disabled")
-
-            # For Niblack button - check if k value is valid
             if is_valid_k_value(k_value_var.get().strip()):
                 niblack_button.config(state="normal")
-            else:
-                niblack_button.config(state="disabled")
-
-            # For Sauvola button - check if both k value and r value are valid
             if is_valid_k_value(k_value_var.get().strip()) and is_valid_r_value(r_value_var.get().strip()):
                 sauvola_button.config(state="normal")
-            else:
-                sauvola_button.config(state="disabled")
         else:
-            feedback.config(text="Invalid\n\n\n(musi być liczbą nieparzystą pomiędzy 3-101)", foreground="red")
-            brensen_button.config(state="disabled")
-            niblack_button.config(state="disabled")
-            sauvola_button.config(state="disabled")
+            raise ValueError
     except ValueError:
-        feedback.config(text="Invalid\n\n\n(musi być liczbą całkowitą)", foreground="red")
+        feedback.config(text="Niepoprawne (3-101, nieparzyste)", foreground="red")
         brensen_button.config(state="disabled")
         niblack_button.config(state="disabled")
         sauvola_button.config(state="disabled")
@@ -381,10 +346,10 @@ def validate_sq_size(sq_size_var, feedback, brensen_button, niblack_button, sauv
 
 
 
-
 def niblack():
     method = "niblack"
     global image, threshold, sq_size, k_value
+
 
     # Convert image to grayscale and then to a NumPy array
     img_array = np.array(image.convert('L'))
