@@ -13,6 +13,10 @@ from scipy.ndimage import minimum_filter, maximum_filter
 import math
 import itertools
 from collections.abc import Iterable
+from scipy.signal import convolve2d
+from scipy.ndimage import generic_filter
+
+
 
 window = tk.Tk()
 window.config(background="#e7e7e7")
@@ -47,7 +51,7 @@ b_weight = tk.StringVar()
 
 def select_file():  # wybiera plik (zdjecie)
     kill_UI()
-    global dataframe, filename, image_location, image_name, image, timestamped_folder_path
+    global full_path, dataframe, filename, image_location, image_name, image, timestamped_folder_path
     filetypes = (
         ('jpg files', '*.jpg'),
         ('All files', '*.*'))
@@ -99,7 +103,7 @@ def get_thresh():  # wpisywanie progu dla binaryzacji
         window,
         text="Dalej",
         state="disabled",
-        command=lambda: (kill_UI(), make_images())
+        command=lambda: (kill_UI(), wybor_dzialan())
     )
     submit_button.place(x=250, y=150)
 
@@ -118,18 +122,107 @@ def validate_thresh(rat, feedback4, submit_button):  # walidacja tego progu
         feedback4.config(text="Nie Prawidlowe \n\n\n (wartosci tylko od 0 do 255)", foreground="red")
         submit_button.config(state="disabled")
 
+def wybor_dzialan():
+    kill_UI()
+    global pytaniea, bina_button, hisa_button, fila_button
+    pytaniea = ttk.Label(window, text="co robimy?", background="#e7e7e7")
+    pytaniea.place(x=250, y=150)
 
-def make_images():  # przyciski
+    bina_button = ttk.Button(window, text="binaryzacje", width=20, command=lambda: (kill_UI(), binaryz()))
+    bina_button.place(x=100, y=200)
+    hisa_button = ttk.Button(window, text="histogramy", width=20, command=lambda: (kill_UI(), histy()))
+    hisa_button.place(x=300, y=200)
+    fila_button = ttk.Button(window, text="filtry", width=20, command=lambda: (kill_UI(), filtry()))
+    fila_button.place(x=500, y=200)
+
+
+
+def filtry():
+
+    fil = tk.StringVar()
+    pix = tk.StringVar()
+
+    label1 = ttk.Label(window, text="Pliki zostaną zapisany w folderze: {}".format(timestamped_folder_path),
+                       background="#e7e7e7")
+    label1.place(x=255, y=20)
+
+    inne_op = ttk.Button(window, text="inne operacje", width=20, command=wybor_dzialan)
+    inne_op.place(x=300, y=600)
+
+    sobel_button = ttk.Button(window, text="sobel method", width=20, command=lambda: sobel())
+    sobel_button.place(x=200, y=150)
+
+    median_button = ttk.Button(window, text="median method", width=20, state='disabled', command=lambda: median_meth(fil))
+    median_button.place(x=200, y=300)
+
+    kuwah_button = ttk.Button(window, text="kuwahara method", width=20, state='disabled', command=lambda: apply_kuwahara(fil))
+    kuwah_button.place(x=200, y=450)
+
+    pixel_button = ttk.Button(window, text="pixelezacja method", width=20, state='disabled', command=lambda:  pixelate(pix))
+    pixel_button.place(x=200, y=600)
+
+
+
+    label_median = ttk.Label(window, text="moc filtru:", background="#e7e7e7")
+    label_median.place(x=400, y=125)
+    entry_median = ttk.Entry(window, textvariable=fil, width=5)
+    entry_median.place(x=400, y=150)
+    feedback6 = ttk.Label(window, text="", background="#e7e7e7")
+    feedback6.place(x=450, y=175)
+    fil.trace_add("write", lambda *args: validate_fil(fil, feedback6, median_button,kuwah_button))
+
+    label_pix = ttk.Label(window, text="moc pixelizacji:", background="#e7e7e7")
+    label_pix.place(x=400, y=575)
+    entry_pix = ttk.Entry(window, textvariable=pix, width=5)
+    entry_pix.place(x=400, y=600)
+    feedback9 = ttk.Label(window, text="", background="#e7e7e7")
+    feedback9.place(x=450, y=625)
+    pix.trace_add("write", lambda *args: validate_pix(pix, feedback9, pixel_button))
+    close_button = ttk.Button(window, text="Zamknij okienko", width=20, command=window.destroy)
+    close_button.place(x=50, y=700)
+
+    restart_button = ttk.Button(window, text="zacznij od nowa", width=20, command=lambda: select_file())
+    restart_button.place(x=600, y=700)
+
+
+
+
+def validate_pix(pix, feedback9, pixel_button):  # walidacja tego progu
+    global threshold
+    val = pix.get().strip()
+
+    if val.isdigit() and (0 <= int(val) <= 50):
+        threshold = int(val)
+        feedback9.config(text="Prawidlowe", foreground="green")
+        pixel_button.config(state="normal")
+
+    else:
+        feedback9.config(text="Nie Prawidlowe \n\n\n (wartosci tylko od 0 do 50)", foreground="red")
+        pixel_button.config(state="disabled")
+
+
+def validate_fil(fil, feedback6, median_button,kuwah_button):  # walidacja tego progu
+    global threshold
+    val = fil.get().strip()
+
+    if val.isdigit() and (0 <= int(val) <= 20):
+        threshold = int(val)
+        feedback6.config(text="Prawidlowe", foreground="green")
+        median_button.config(state="normal")
+        kuwah_button.config(state="normal")
+    else:
+        feedback6.config(text="Nie Prawidlowe \n\n\n (wartosci tylko od 0 do 20)", foreground="red")
+        median_button.config(state="disabled")
+        kuwah_button.config(state="disabled")
+
+
+
+
+def histy():
     kill_UI()
     left_col = 100
     right_col = 500
     mid_col = 300
-    label1 = ttk.Label(window, text="Pliki zostaną zapisany w folderze: {}".format(image_location),
-                       background="#e7e7e7")
-    label1.place(x=mid_col, y=20)
-
-    show_button = ttk.Button(window, text="pokaz obraz", width=20, command=lambda: image.show())
-    show_button.place(x=right_col, y=50)
 
     stretching_checkbox = ttk.Checkbutton(window, text="Rozciagniecie histogramu", variable=stretch)
     stretching_checkbox.place(x=left_col, y=100)
@@ -140,20 +233,13 @@ def make_images():  # przyciski
     otsu_checkbox = ttk.Checkbutton(window, text="metoda Otsu", variable=otsu)
     otsu_checkbox.place(x=right_col, y=100)
 
-    bin_normal_button = ttk.Button(window, text="binaryzacja srednia", width=20, command=lambda: binarize_image())
-    bin_normal_button.place(x=left_col, y=200)
 
-    bin_red_button = ttk.Button(window, text="binaryzacja czerwona ", width=20, command=lambda: binarize_image('r'))
-    bin_red_button.place(x=left_col, y=250)
+    label1 = ttk.Label(window, text="Pliki zostaną zapisany w folderze: {}".format(timestamped_folder_path),
+                       background="#e7e7e7")
+    label1.place(x=mid_col, y=20)
 
-    bin_green_button = ttk.Button(window, text="binaryzacja zielona", width=20, command=lambda: binarize_image('g'))
-    bin_green_button.place(x=left_col, y=300)
-
-    bin_blue_button = ttk.Button(window, text="binaryzacja niebieska", width=20, command=lambda: binarize_image('b'))
-    bin_blue_button.place(x=left_col, y=350)
-
-    bin_other_button = ttk.Button(window, text="inne", width=20, command=lambda: (kill_UI(), other_bins_window()))
-    bin_other_button.place(x=left_col, y=400)
+    show_button = ttk.Button(window, text="pokaz obraz", width=20, command=lambda: image.show())
+    show_button.place(x=right_col, y=50)
 
     hist_all_button = ttk.Button(window, text="sredni histogram", width=20, command=lambda: create_histogram())
     hist_all_button.place(x=right_col, y=200)
@@ -170,14 +256,8 @@ def make_images():  # przyciski
     hist_gray_button = ttk.Button(window, text="szary histogram", width=20, command=lambda: create_histogram('average'))
     hist_gray_button.place(x=right_col, y=400)
 
-    bin_full_button = ttk.Button(window, text="wszystkie binaryzacje", width=20, command=lambda: all_bins())
-    bin_full_button.place(x=left_col, y=550)
-
     hist_full_button = ttk.Button(window, text="wszystkie histogramy", width=20, command=lambda: all_hists())
     hist_full_button.place(x=right_col, y=550)
-
-    all_button = ttk.Button(window, text="wszystko", width=20, command=lambda: all_everything())
-    all_button.place(x=mid_col, y=600)
 
     close_button = ttk.Button(window, text="Zamknij okienko", width=20, command=window.destroy)
     close_button.place(x=left_col, y=700)
@@ -191,10 +271,67 @@ def make_images():  # przyciski
         width=20,
         command=lambda: HELP_window(
             "Pokaz obraz pokazuje wybrany obraz \n\n\n "
-            "Binaryzacja  srednia/czerwona/zielona/niebieska wykonuje binaryzacju wybranego typu, wynikujacy plik zapisuje\n\n\n"
             "Histogram  sredni/czerwony/zielony/niebieski/szary robi histogram wybranego typu, wynikujacy plik zapisuje\n\n\n"
             "wszystkie binaryzacje/histogramy wykonuje binaryzacje/histogramy kazdego typu, wynikujace pliki zapisuje\n\n\n"
-            "przycisk \"wszystko\" wykonuje wszystkie binaryzacje/histogramy, wynikujace pliki zapisuje\n\n\n"
+        )
+    )
+    info_button.place(x=mid_col, y=650)
+
+    inne_op = ttk.Button(window, text="inne operacje", width=20, command=wybor_dzialan)
+    inne_op.place(x=left_col, y=600)
+
+def binaryz():  # przyciski
+    kill_UI()
+    left_col = 100
+    right_col = 500
+    mid_col = 300
+    label1 = ttk.Label(window, text="Pliki zostaną zapisany w folderze: {}".format(timestamped_folder_path),
+                       background="#e7e7e7")
+    label1.place(x=mid_col, y=20)
+
+    show_button = ttk.Button(window, text="pokaz obraz", width=20, command=lambda: image.show())
+    show_button.place(x=right_col, y=50)
+
+
+
+    bin_normal_button = ttk.Button(window, text="binaryzacja srednia", width=20, command=lambda: binarize_image())
+    bin_normal_button.place(x=left_col, y=200)
+
+    bin_red_button = ttk.Button(window, text="binaryzacja czerwona ", width=20, command=lambda: binarize_image('r'))
+    bin_red_button.place(x=left_col, y=250)
+
+    bin_green_button = ttk.Button(window, text="binaryzacja zielona", width=20, command=lambda: binarize_image('g'))
+    bin_green_button.place(x=left_col, y=300)
+
+    bin_blue_button = ttk.Button(window, text="binaryzacja niebieska", width=20, command=lambda: binarize_image('b'))
+    bin_blue_button.place(x=left_col, y=350)
+
+    bin_other_button = ttk.Button(window, text="inne", width=20, command=lambda: (kill_UI(), other_bins_window()))
+    bin_other_button.place(x=left_col, y=400)
+
+
+
+    bin_full_button = ttk.Button(window, text="wszystkie binaryzacje", width=20, command=lambda: all_bins())
+    bin_full_button.place(x=left_col, y=550)
+
+
+    close_button = ttk.Button(window, text="Zamknij okienko", width=20, command=window.destroy)
+    close_button.place(x=left_col, y=700)
+
+    restart_button = ttk.Button(window, text="zacznij od nowa", width=20, command=lambda: select_file())
+    restart_button.place(x=right_col, y=700)
+
+    inne_op = ttk.Button(window, text="inne operacje", width=20, command=wybor_dzialan)
+    inne_op.place(x=left_col, y=600)
+
+    info_button = ttk.Button(
+        window,
+        text="Pokaz Info",
+        width=20,
+        command=lambda: HELP_window(
+            "Pokaz obraz pokazuje wybrany obraz \n\n\n "
+            "Binaryzacja  srednia/czerwona/zielona/niebieska wykonuje binaryzacju wybranego typu, wynikujacy plik zapisuje\n\n\n"
+            "wszystkie binaryzacje/histogramy wykonuje binaryzacje/histogramy kazdego typu, wynikujace pliki zapisuje\n\n\n"
         )
     )
     info_button.place(x=mid_col, y=650)
@@ -295,8 +432,160 @@ def other_bins_window():
     b_weight.trace_add("write", lambda *args: validate_weightsrgb(
         r_weight, g_weight, b_weight, feedback4, weighted_button))
 
-    back_button = ttk.Button(window, text="back", width=20, command=lambda: make_images())
+    back_button = ttk.Button(window, text="back", width=20, command=lambda: binaryz())
     back_button.place(x=400, y=600)
+
+def sobel():
+    global full_path
+    input_image = plt.imread(full_path)
+
+    # Extracting RGB components
+    r_img, g_img, b_img = input_image[:, :, 0], input_image[:, :, 1], input_image[:, :, 2]
+
+    # Convert to grayscale with gamma correction (vectorized)
+    gamma = 1.400
+    r_const, g_const, b_const = 0.2126, 0.7152, 0.0722
+    grayscale_image = (r_const * r_img ** gamma +
+                       g_const * g_img ** gamma +
+                       b_const * b_img ** gamma)
+
+    # Define Sobel kernels
+    Gx = np.array([[1.0, 0.0, -1.0], [2.0, 0.0, -2.0], [1.0, 0.0, -1.0]])
+    Gy = np.array([[1.0, 2.0, 1.0], [0.0, 0.0, 0.0], [-1.0, -2.0, -1.0]])
+
+    # Use convolution for much faster edge detection
+    gx = convolve2d(grayscale_image, Gx, mode='same', boundary='symm')
+    gy = convolve2d(grayscale_image, Gy, mode='same', boundary='symm')
+
+    # Compute magnitude of gradients
+    sobel_filtered_image = np.sqrt(gx ** 2 + gy ** 2)
+
+    sobel_normalized = ((sobel_filtered_image - sobel_filtered_image.min()) /
+                        (sobel_filtered_image.max() - sobel_filtered_image.min()) * 255).astype(np.uint8)
+
+    # Prepare save paths
+    save_path = os.path.join(timestamped_folder_path, f"Sobel_{image_name}").replace('\\', '/')
+    filtered_image_path = os.path.join(timestamped_folder_path, f"Sobel_filtered_{image_name}").replace('\\', '/')
+
+    # Create directories if they don't exist
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+
+    # Save the Sobel filtered image
+    Image.fromarray(sobel_normalized).save(filtered_image_path)
+
+    # Visualize results
+    plt.figure(figsize=(12, 6))
+    plt.subplot(121)
+    plt.title('Original Image')
+    plt.imshow(input_image)
+    plt.axis('off')
+
+    plt.subplot(122)
+    plt.title('Sobel Edge Detection')
+    plt.imshow(sobel_filtered_image, cmap=plt.get_cmap('gray'))
+    plt.axis('off')
+
+    plt.tight_layout()
+    plt.savefig(save_path)
+    plt.show()
+    plt.close()  # Close the plot to free up memory
+
+    return sobel_filtered_image
+
+
+def median_meth(filter_size=5):
+    global full_path
+    # Open image and convert to grayscale
+    img = Image.open(full_path).convert('RGB')
+    data = np.array(img)
+
+    filter_size=int(filter_size.get())
+    # Prepare output array
+    rows, cols, channels = data.shape
+    filtered_data = np.zeros_like(data, dtype=data.dtype)
+
+    # Padding calculation
+    pad = filter_size // 2
+
+    # Extend the image with reflect padding (better than zero padding)
+    padded_data = np.pad(data, ((pad, pad), (pad, pad), (0, 0)), mode='reflect')
+
+    # Apply median filter for each pixel
+    for i in range(rows):
+        for j in range(cols):
+            # Extract local window
+            window = padded_data[i:i + filter_size, j:j + filter_size, :]
+
+            # Flatten window and find median across all color channels
+            filtered_data[i, j] = np.median(window.reshape(-1, channels), axis=0)
+
+    # Visualization
+    save_path = os.path.join(timestamped_folder_path, f"color_median_{image_name}").replace('\\', '/')
+    filtered_image_path = os.path.join(timestamped_folder_path, f"color_median_filtered_{image_name}").replace('\\',
+                                                                                                               '/')
+
+    # Create directories if they don't exist
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+
+    # Save filtered image
+    Image.fromarray(filtered_data).save(filtered_image_path)
+
+    # Visualization
+    plt.figure(figsize=(12, 6))
+    plt.subplot(121)
+    plt.title('Original Image')
+    plt.imshow(data)
+    plt.axis('off')
+
+    plt.subplot(122)
+    plt.title(f'Median Filtered Image ({filter_size}x{filter_size})')
+    plt.imshow(filtered_data)
+    plt.axis('off')
+
+    plt.tight_layout()
+    plt.savefig(save_path)
+    plt.show()
+    plt.close()
+
+    return filtered_data
+
+
+
+def apply_kuwahara(window_size=5):
+    global image
+    image_array = np.array(image)
+
+    # If it's a color image, apply to each channel
+    if len(image_array.shape) == 3:  # Color image
+        filtered_channels = [kuwahara_filter(image_array[:, :, i], window_size) for i in range(image_array.shape[2])]
+        filtered_image = np.stack(filtered_channels, axis=-1)
+    else:  # Grayscale
+        filtered_image = kuwahara_filter(image_array, window_size)
+
+    filtered_image = Image.fromarray(filtered_image)
+    filtered_image.show()
+
+
+
+    return filtered_image
+
+def pixelate(pixelate_lvl):
+    global image
+    org_size = image.size
+    pixelate_lvl=int(pixelate_lvl.get())
+    # scale it down
+    image_smol = image.resize(
+        size=(org_size[0] // pixelate_lvl, org_size[1] // pixelate_lvl),
+        resample=0)
+    # and scale it up to get pixelate effect
+    image_big = image_smol.resize(org_size, resample=0)
+
+    new_file_path = os.path.join(timestamped_folder_path, f"Pixelated_{pixelate_lvl}__{image_name}").replace('\\', '/')
+    os.makedirs(os.path.dirname(new_file_path), exist_ok=True)
+    image_big.save(new_file_path)
+    image_big.show()
+
+
 
 
 
@@ -343,8 +632,39 @@ def validate_sq_size(sq_size_var, feedback, brensen_button, niblack_button, sauv
         sauvola_button.config(state="disabled")
 
 
+def kuwahara_filter_region(values):
+    # Extract the 4 regions from the values (which correspond to the 4 quadrants)
+    half = len(values) // 4
+    region1 = values[:half]  # North-west
+    region2 = values[half:2 * half]  # North-east
+    region3 = values[2 * half:3 * half]  # South-west
+    region4 = values[3 * half:]  # South-east
 
+    # Compute the mean and stddev for each region
+    means = [np.mean(region1), np.mean(region2), np.mean(region3), np.mean(region4)]
+    stddevs = [np.std(region1), np.std(region2), np.std(region3), np.std(region4)]
 
+    # Return the mean of the region with the smallest stddev
+    return means[np.argmin(stddevs)]
+
+def kuwahara_filter(image, winsize=5):
+
+    winsize=int(winsize.get())
+    image = image.astype(np.float64)
+
+    half = (winsize - 1) // 2
+
+    # Create a zero-padded image for boundary handling
+    padded_image = np.pad(image, ((half, half), (half, half)), mode='reflect')
+
+    # Define the neighborhood size (4 quadrants per pixel)
+    neighborhood = winsize * winsize
+
+    # Apply the sliding window function to each pixel using generic_filter
+    filtered_image = generic_filter(padded_image, kuwahara_filter_region, size=(winsize, winsize), mode='reflect')
+
+    # Convert back to uint8
+    return filtered_image.astype(np.uint8)
 
 def niblack():
     method = "niblack"
@@ -502,25 +822,6 @@ def all_hists():  # wszystkie histogramy, +timer
     global state
     state = "all"
 
-    create_histogram()
-    create_histogram("r")
-    create_histogram("g")
-    create_histogram("b")
-    create_histogram("average")
-    state = "o"
-    elapsed_time = time.time() - start_time
-    showinfo(title="Czas", message=f"Ukończono w ciągu {elapsed_time:.4f} sekund")
-
-
-def all_everything():  # binaryzacje + histogramy, +timer
-    start_time = time.time()
-    global state
-    state = "all"
-
-    binarize_image()
-    binarize_image("r")
-    binarize_image("g")
-    binarize_image("b")
     create_histogram()
     create_histogram("r")
     create_histogram("g")
@@ -813,7 +1114,7 @@ def create_histogram(channel='all'):
 def kill_UI():
     for widget in window.winfo_children():
         widget.place_forget()
-
+    window.update_idletasks()
 
 def HELP_window(message):
     message_window = tk.Toplevel()
