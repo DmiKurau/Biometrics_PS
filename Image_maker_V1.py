@@ -41,7 +41,7 @@ r_value_var = tk.StringVar(value="")
 r_weight = tk.StringVar()
 g_weight = tk.StringVar()
 b_weight = tk.StringVar()
-
+poin="1"
 
 # image.show()
 
@@ -147,37 +147,45 @@ def filtry():
     label1.place(x=255, y=20)
 
     inne_op = ttk.Button(window, text="inne operacje", width=20, command=wybor_dzialan)
-    inne_op.place(x=300, y=600)
+    inne_op.place(x=400, y=600)
 
     sobel_button = ttk.Button(window, text="sobel method", width=20, command=lambda: sobel())
-    sobel_button.place(x=200, y=150)
+    sobel_button.place(x=200, y=100)
+
+
+
 
     median_button = ttk.Button(window, text="median method", width=20, state='disabled', command=lambda: median_meth(fil))
-    median_button.place(x=200, y=300)
+    median_button.place(x=200, y=200)
 
     kuwah_button = ttk.Button(window, text="kuwahara method", width=20, state='disabled', command=lambda: apply_kuwahara(fil))
-    kuwah_button.place(x=200, y=450)
+    kuwah_button.place(x=200, y=300)
 
     pixel_button = ttk.Button(window, text="pixelezacja method", width=20, state='disabled', command=lambda:  pixelate(pix))
-    pixel_button.place(x=200, y=600)
+    pixel_button.place(x=200, y=400)
 
+    mirgb_button = ttk.Button(window, text="MinRGB method", width=20, command=lambda: min_rgb())
+    mirgb_button.place(x=200, y=500)
+
+    predator_button = ttk.Button(window, text="predator method",state='disabled', width=20, command=lambda: predator(pix))
+    predator_button.place(x=500, y=300)
 
 
     label_median = ttk.Label(window, text="moc filtru:", background="#e7e7e7")
-    label_median.place(x=400, y=125)
+    label_median.place(x=400, y=225)
     entry_median = ttk.Entry(window, textvariable=fil, width=5)
-    entry_median.place(x=400, y=150)
+    entry_median.place(x=400, y=250)
     feedback6 = ttk.Label(window, text="", background="#e7e7e7")
-    feedback6.place(x=450, y=175)
+    feedback6.place(x=450, y=275)
     fil.trace_add("write", lambda *args: validate_fil(fil, feedback6, median_button,kuwah_button))
 
     label_pix = ttk.Label(window, text="moc pixelizacji:", background="#e7e7e7")
-    label_pix.place(x=400, y=575)
+    label_pix.place(x=400, y=375)
     entry_pix = ttk.Entry(window, textvariable=pix, width=5)
-    entry_pix.place(x=400, y=600)
+    entry_pix.place(x=400, y=400)
     feedback9 = ttk.Label(window, text="", background="#e7e7e7")
-    feedback9.place(x=450, y=625)
-    pix.trace_add("write", lambda *args: validate_pix(pix, feedback9, pixel_button))
+    feedback9.place(x=450, y=425)
+    pix.trace_add("write", lambda *args: validate_pix(pix, feedback9, pixel_button,predator_button))
     close_button = ttk.Button(window, text="Zamknij okienko", width=20, command=window.destroy)
     close_button.place(x=50, y=700)
 
@@ -187,7 +195,7 @@ def filtry():
 
 
 
-def validate_pix(pix, feedback9, pixel_button):  # walidacja tego progu
+def validate_pix(pix, feedback9, pixel_button,predator_button):  # walidacja tego progu
     global threshold
     val = pix.get().strip()
 
@@ -195,10 +203,13 @@ def validate_pix(pix, feedback9, pixel_button):  # walidacja tego progu
         threshold = int(val)
         feedback9.config(text="Prawidlowe", foreground="green")
         pixel_button.config(state="normal")
+        predator_button.config(state="normal")
 
     else:
         feedback9.config(text="Nie Prawidlowe \n\n\n (wartosci tylko od 0 do 50)", foreground="red")
         pixel_button.config(state="disabled")
+        predator_button.config(state="disabled")
+
 
 
 def validate_fil(fil, feedback6, median_button,kuwah_button):  # walidacja tego progu
@@ -436,7 +447,7 @@ def other_bins_window():
     back_button.place(x=400, y=600)
 
 def sobel():
-    global full_path
+    global full_path, poin
     input_image = plt.imread(full_path)
 
     # Extracting RGB components
@@ -471,7 +482,8 @@ def sobel():
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
 
     # Save the Sobel filtered image
-    Image.fromarray(sobel_normalized).save(filtered_image_path)
+    sobel_image=Image.fromarray(sobel_normalized)
+    sobel_image.save(filtered_image_path)
 
     # Visualize results
     plt.figure(figsize=(12, 6))
@@ -487,11 +499,53 @@ def sobel():
 
     plt.tight_layout()
     plt.savefig(save_path)
-    plt.show()
+    if poin == "1":
+        plt.show()
+        sobel_image.show()
+
     plt.close()  # Close the plot to free up memory
 
-    return sobel_filtered_image
 
+    sobel_edges=Image.fromarray(sobel_normalized)
+    return sobel_edges
+
+
+def sobel_edge_detection(pro_image=image):
+    # Convert image to numpy array
+    img_array = np.array(pro_image)
+
+    # Separate RGB channels
+    r_channel = img_array[:, :, 0]
+    g_channel = img_array[:, :, 1]
+    b_channel = img_array[:, :, 2]
+
+    # Sobel kernels
+    Gx = np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]])
+    Gy = np.array([[-1, -2, -1], [0, 0, 0], [1, 2, 1]])
+
+    # Function to apply Sobel to a single channel
+    def apply_sobel(channel):
+        # Compute x and y gradients using convolve2d
+        x_grad = np.abs(convolve2d(channel, Gx, mode='same', boundary='symm'))
+        y_grad = np.abs(convolve2d(channel, Gy, mode='same', boundary='symm'))
+
+        # Compute gradient magnitude
+        gradient_magnitude = np.sqrt(x_grad ** 2 + y_grad ** 2)
+
+        # Normalize
+        return ((gradient_magnitude - gradient_magnitude.min()) /
+                (gradient_magnitude.max() - gradient_magnitude.min()) * 255).astype(np.uint8)
+
+    # Apply Sobel to each channel
+    r_edges = apply_sobel(r_channel)
+    g_edges = apply_sobel(g_channel)
+    b_edges = apply_sobel(b_channel)
+
+    # Recombine channels
+    edges_array = np.stack([r_edges, g_edges, b_edges], axis=-1)
+
+    egded_image=Image.fromarray(edges_array)
+    return egded_image
 
 def median_meth(filter_size=5):
     global full_path
@@ -521,14 +575,14 @@ def median_meth(filter_size=5):
 
     # Visualization
     save_path = os.path.join(timestamped_folder_path, f"color_median_{image_name}").replace('\\', '/')
-    filtered_image_path = os.path.join(timestamped_folder_path, f"color_median_filtered_{image_name}").replace('\\',
-                                                                                                               '/')
+    filtered_image_path = os.path.join(timestamped_folder_path, f"color_median_filtered_{filter_size}_{image_name}").replace('\\','/')
 
     # Create directories if they don't exist
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
 
     # Save filtered image
-    Image.fromarray(filtered_data).save(filtered_image_path)
+    median_image = Image.fromarray(filtered_data)
+    median_image.save(filtered_image_path)
 
     # Visualization
     plt.figure(figsize=(12, 6))
@@ -544,7 +598,9 @@ def median_meth(filter_size=5):
 
     plt.tight_layout()
     plt.savefig(save_path)
-    plt.show()
+    if poin == "1":
+        plt.show()
+        median_image.show()
     plt.close()
 
     return filtered_data
@@ -566,13 +622,19 @@ def apply_kuwahara(window_size=5):
     filtered_image.show()
 
 
+    filtered_image_path = os.path.join(timestamped_folder_path, f"kuwah_{int(window_size.get())}_{image_name}").replace('\\','/')
+
+    filtered_image.save(filtered_image_path)
+
+
 
     return filtered_image
 
-def pixelate(pixelate_lvl):
-    global image
+def pixelate(pixelate_lvl,provided_image=image):
+
     org_size = image.size
-    pixelate_lvl=int(pixelate_lvl.get())
+    if type(pixelate_lvl) != int:
+        pixelate_lvl=int(pixelate_lvl.get())
     # scale it down
     image_smol = image.resize(
         size=(org_size[0] // pixelate_lvl, org_size[1] // pixelate_lvl),
@@ -583,7 +645,64 @@ def pixelate(pixelate_lvl):
     new_file_path = os.path.join(timestamped_folder_path, f"Pixelated_{pixelate_lvl}__{image_name}").replace('\\', '/')
     os.makedirs(os.path.dirname(new_file_path), exist_ok=True)
     image_big.save(new_file_path)
-    image_big.show()
+    if poin == "1":
+        image_big.show()
+    return image_big
+
+
+def min_rgb(provided_image=image):
+    if poin=="1":
+        global image
+        provided_image=image
+
+    # Convert to numpy array
+    img_array = np.array(provided_image)
+
+    # Ensure image is in RGB format
+    if len(img_array.shape) == 2:  # Grayscale image
+        raise ValueError("Provided image is grayscale. Expected RGB image.")
+
+    if len(img_array.shape) != 3 or img_array.shape[2] != 3:
+        raise ValueError(f"Unexpected image shape: {img_array.shape}. Expected (H, W, 3).")
+
+    # Find the index of the minimal channel for each pixel
+    min_channel_indices = np.argmin(img_array, axis=2)
+
+    # Create output array
+    out_array = np.zeros_like(img_array)
+
+    # Set the minimal channel to its original value, others to 0
+    for i in range(img_array.shape[0]):
+        for j in range(img_array.shape[1]):
+            min_channel = min_channel_indices[i, j]
+            out_array[i, j, min_channel] = img_array[i, j, min_channel]
+
+    # Convert back to PIL Image
+    mirgb_image = Image.fromarray(out_array)
+
+    new_file_path = os.path.join(timestamped_folder_path, f"MinRGB__{image_name}").replace('\\', '/')
+    os.makedirs(os.path.dirname(new_file_path), exist_ok=True)
+    mirgb_image.save(new_file_path)
+
+
+    if poin == "1":
+        mirgb_image.show()
+    return mirgb_image
+
+def predator(pixelate_level=10):
+    global poin
+    poin="0"
+    pixelated=pixelate(pixelate_level)
+
+
+    mined=min_rgb(pixelated)
+    predate_image=sobel_edge_detection(mined)
+    poin="1" #keep poin
+    predate_image.show()
+    new_file_path = os.path.join(timestamped_folder_path, f"PREDATOR!!!_{image_name}").replace('\\', '/')
+    os.makedirs(os.path.dirname(new_file_path), exist_ok=True)
+    predate_image.save(new_file_path)
+    return predate_image
 
 
 
