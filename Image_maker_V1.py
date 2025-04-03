@@ -1,21 +1,16 @@
-import os
+import os, math, itertools, time
+import numpy as np
 import tkinter as tk  # GUI window
-from tkinter import ttk  # input fields
+
+from tkinter import ttk , messagebox # input fields
 from tkinter import filedialog as fd  # file open
 from tkinter.messagebox import showinfo  # info box
-from PIL import Image
-import cv2
-import numpy as np
+from PIL import Image, ImageTk, ImageDraw
 from matplotlib import pyplot as plt
-import time
 from datetime import datetime
-from scipy.ndimage import minimum_filter, maximum_filter
-import math
-import itertools
 from collections.abc import Iterable
 from scipy.signal import convolve2d
-from scipy.ndimage import generic_filter
-
+from scipy.ndimage import generic_filter, binary_dilation, binary_erosion, minimum_filter, maximum_filter
 
 
 window = tk.Tk()
@@ -42,6 +37,15 @@ r_weight = tk.StringVar()
 g_weight = tk.StringVar()
 b_weight = tk.StringVar()
 poin="1"
+tolerance=tk.StringVar()
+global_flood_enabled = False
+drawing_image = None
+original_drawing_image = None
+drawing_draw = None
+drawing_tk_image = None
+selected_color = [255, 0, 0, 255]  # Default red color
+global_flood_mode = False
+
 
 # image.show()
 
@@ -50,7 +54,7 @@ poin="1"
 
 def kill_UI():
     for widget in window.winfo_children():
-        widget.place_forget()
+        widget.destroy()
     window.update_idletasks()
 
 def HELP_window(message):
@@ -79,7 +83,7 @@ def select_file():  # wybiera plik (zdjecie)
             image_location, image_name = os.path.split(filename)
             full_path = os.path.join(image_location, image_name).replace('\\', '/')
             image = Image.open(full_path)
-            showinfo(title="plik otwarty", message=f"otwarto plik: {filename}")
+            showinfo(title="plik otwarty", message=f"plik otwarty: {filename}")
             timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
             timestamped_folder_path = os.path.join(image_location, timestamp)
             timestamped_folder_path = os.path.normpath(timestamped_folder_path).replace('\\', '/')
@@ -147,6 +151,257 @@ def wybor_dzialan():
     hisa_button.place(x=300, y=200)
     fila_button = ttk.Button(window, text="filtry", width=20, command=lambda: (kill_UI(), filtry()))
     fila_button.place(x=500, y=200)
+    rysow_button = ttk.Button(window, text="rysowanie", width=20, command=lambda: (kill_UI(), enable_drawing()))
+    rysow_button.place(x=300, y=300)
+
+
+def enable_drawing():
+    global btn_toggle_flood, drawing_canvas, r_weight, g_weight, b_weight, drawing_image, original_drawing_image, drawing_draw
+
+    kill_UI()
+
+    MAX_WIDTH, MAX_HEIGHT = 900, 500  # Define max size for the image
+
+    drawing_canvas = tk.Canvas(window, width=MAX_WIDTH, height=MAX_HEIGHT)
+    drawing_canvas.place(x=50, y=1)  # Position the canvas
+
+    enable_drawing_actions()  # Ensure drawing actions are bound IMMEDIATELY
+
+    # If an image is already loaded, prepare it for drawing right away
+    if image is not None:
+        img_width, img_height = image.size
+        if img_width > MAX_WIDTH or img_height > MAX_HEIGHT:
+            scale = min(MAX_WIDTH / img_width, MAX_HEIGHT / img_height)  # Scale factor
+            new_size = (int(img_width * scale), int(img_height * scale))
+            drawing_image = image.resize(new_size, Image.Resampling.LANCZOS)
+        else:
+            drawing_image = image.copy()
+
+        original_drawing_image = drawing_image.copy()
+        drawing_draw = ImageDraw.Draw(drawing_image)  # Enable drawing
+
+        drawing_canvas.config(width=drawing_image.width, height=drawing_image.height)  # Resize canvas
+        update_drawing_canvas()  # Show the image immediately
+
+    # Create buttons
+    btn_toggle_flood = ttk.Button(window, text='tryb globalny', command=toggle_global_flood)
+    btn_toggle_flood.place(x=100, y=600)
+
+    btn_toggle_expand = ttk.Button(window, text='Rozszerzanie', command=expand_selection)
+    btn_toggle_expand.place(x=300, y=600)
+
+    btn_toggle_contract = ttk.Button(window, text='zmniejszanie', command=contract_selection)
+    btn_toggle_contract.place(x=500, y=600)
+
+    # Color selection
+
+
+    r_weight = tk.StringVar()
+    g_weight = tk.StringVar()
+    b_weight = tk.StringVar()
+
+    ttk.Label(window, text="Czerwony").place(x=300, y=640)
+    ttk.Label(window, text="Zielony").place(x=400, y=640)
+    ttk.Label(window, text="Niebieski").place(x=500, y=640)
+
+    entry_red = ttk.Entry(window, textvariable=r_weight, width=10, background="white")
+    entry_red.place(x=300, y=670)
+
+    entry_green = ttk.Entry(window, textvariable=g_weight, width=10, background="white")
+    entry_green.place(x=400, y=670)
+
+    entry_blue = ttk.Entry(window, textvariable=b_weight, width=10, background="white")
+    entry_blue.place(x=500, y=670)
+
+    update_color_btn = ttk.Button(window, text="ustaw kolor", command=update_color)
+    update_color_btn.place(x=650, y=670)
+
+    label_tolerance = ttk.Label(window, text="tolerancja:", background="#e7e7e7")
+    label_tolerance.place(x=800, y=640)
+    entry_tolerance = ttk.Entry(window, textvariable=tolerance, width=5)
+    entry_tolerance.place(x=800, y=670)
+    feedback7 = ttk.Label(window, text="", background="#e7e7e7")
+    feedback7.place(x=800, y=700)
+    tolerance.trace_add("write", lambda *args: validate_tolerance(tolerance, feedback7))
+
+    # Back button
+    inne_op = ttk.Button(window, text="inne operacje", width=20, command=wybor_dzialan)
+    inne_op.place(x=500, y=750)
+
+def validate_tolerance(tol, feedback7):  # walidacja tego progu
+
+    val = tol.get().strip()
+
+    if val.isdigit() and (0 <= int(val) <= 255):
+
+        feedback7.config(text="Prawidlowe", foreground="green")
+        re_enable_flood()
+    else:
+        feedback7.config(text="Nie Prawidlowe \n\n\n (wartosci tylko od 0 do 255)", foreground="red")
+        disable_flood()
+
+
+def enable_drawing_actions():
+    drawing_canvas.bind("<B1-Motion>", paint)  # Left-click drag to draw
+    drawing_canvas.bind("<Button-3>", flood_fill)  # Right-click to flood fill
+def disable_flood():
+    drawing_canvas.unbind("<Button-3>")  # Unbind left-click
+def re_enable_flood():
+    drawing_canvas.bind("<Button-3>", flood_fill)
+def toggle_global_flood():
+    global global_flood_enabled, btn_toggle_flood
+
+    # Toggle the state of the global flood mode
+    global_flood_enabled = not global_flood_enabled
+
+    # Change the button text based on the current state
+    if global_flood_enabled:
+        btn_toggle_flood.config(text="tryb globalny Wł")
+    else:
+        btn_toggle_flood.config(text="tryb globalny Wył")
+
+
+def paint(event):
+    global drawing_image, drawing_draw
+    if drawing_image is None:
+        return
+
+    x, y = event.x, event.y
+    drawing_draw.ellipse([x - 2, y - 2, x + 2, y + 2], fill=tuple(selected_color), outline=tuple(selected_color))
+    update_drawing_canvas()
+
+
+def update_drawing_canvas():
+    global drawing_tk_image
+
+    # Clear previous image before updating
+    drawing_canvas.delete("all")
+
+    # Resize canvas to match the image exactly
+    drawing_canvas.config(width=drawing_image.width, height=drawing_image.height)
+
+    drawing_tk_image = ImageTk.PhotoImage(drawing_image)
+    drawing_canvas.create_image(0, 0, anchor=tk.NW, image=drawing_tk_image)
+
+def flood_fill(event):
+    global drawing_image, drawing_draw,tolerance
+    if drawing_image is None:
+        return
+    tolerance3=int(tolerance.get())
+    x, y = event.x, event.y
+    target_color = np.array(drawing_image.getpixel((x, y)))  # Color at the clicked point
+    new_color = np.array(selected_color)  # Color to fill
+    pixels = np.array(drawing_image)
+
+    if global_flood_enabled:
+        # For global flood mode, fill the whole image where the color matches within tolerance
+        mask = np.all(abs(pixels - target_color) <= tolerance3, axis=-1)
+    else:
+        # For regular flood fill, we use a connected component algorithm
+        mask = np.all(abs(pixels - target_color) <= tolerance3, axis=-1)
+        connected_pixels = np.zeros_like(mask, dtype=bool)
+        stack = [(x, y)]
+
+        while stack:
+            cx, cy = stack.pop()
+            if 0 <= cx < pixels.shape[1] and 0 <= cy < pixels.shape[0] and not connected_pixels[cy, cx] and mask[cy, cx]:
+                connected_pixels[cy, cx] = True
+                # Add the neighboring pixels to the stack
+                stack.extend([(cx + 1, cy), (cx - 1, cy), (cx, cy + 1), (cx, cy - 1)])
+
+        mask = connected_pixels  # Update the mask to reflect the connected region
+
+    # Update the image pixels based on the mode (RGB or RGBA)
+    if pixels.shape[-1] == 4:  # RGBA image (with alpha channel)
+        # Set the RGB values and keep the alpha channel intact
+        pixels[mask] = np.concatenate([new_color[:3], pixels[mask][:, -1][:, None]], axis=-1)
+    else:  # RGB image (no alpha channel)
+        pixels[mask] = new_color[:3]
+
+    # Update the image and drawing object
+    drawing_image = Image.fromarray(pixels)
+    drawing_draw = ImageDraw.Draw(drawing_image)  # Re-enable drawing after filling
+
+    # Refresh the canvas to reflect the changes
+    update_drawing_canvas()
+
+
+def expand_selection(tolerance_value=None):
+    global drawing_image, drawing_draw
+    if drawing_image is None:
+        return
+
+    # Use provided tolerance or get from UI
+    if tolerance_value is None:
+        tolerance_value = int(tolerance.get())
+
+    pixels = np.array(drawing_image)
+    target_color = np.array(selected_color)[:3]  # Get RGB of selected color
+
+    # Create mask where pixels are within tolerance of selected color
+    color_diffs = np.abs(pixels[:, :, :3] - target_color)
+    mask = np.all(color_diffs <= tolerance_value, axis=-1)
+
+    # Apply dilation to the mask
+    expanded_mask = binary_dilation(mask)
+
+    # Update only the newly expanded pixels (those in expanded_mask but not in original mask)
+    new_pixels = expanded_mask & ~mask
+    pixels[new_pixels, :3] = target_color
+
+    drawing_image = Image.fromarray(pixels)
+    drawing_draw = ImageDraw.Draw(drawing_image)
+    update_drawing_canvas()
+
+
+def contract_selection(tolerance_value=None):
+    global drawing_image, drawing_draw, original_drawing_image
+    if drawing_image is None or original_drawing_image is None:
+        return
+
+    # Use provided tolerance or get from UI
+    if tolerance_value is None:
+        tolerance_value = int(tolerance.get())
+
+    pixels = np.array(drawing_image)
+    original_pixels = np.array(original_drawing_image)
+    target_color = np.array(selected_color)[:3]  # Get RGB of selected color
+
+    # Create mask where pixels are within tolerance of selected color
+    color_diffs = np.abs(pixels[:, :, :3] - target_color)
+    mask = np.all(color_diffs <= tolerance_value, axis=-1)
+
+    # Apply erosion to the mask
+    contracted_mask = binary_erosion(mask)
+
+    # Identify pixels that were in the original mask but not in the contracted mask
+    removed_pixels = mask & ~contracted_mask
+
+    # Restore original colors for removed pixels
+    pixels[removed_pixels, :3] = original_pixels[removed_pixels, :3]
+
+    drawing_image = Image.fromarray(pixels)
+    drawing_draw = ImageDraw.Draw(drawing_image)
+    update_drawing_canvas()
+
+
+def update_color():
+    global selected_color
+    try:
+        r = int(r_weight.get() or 0)
+        g = int(g_weight.get() or 0)
+        b = int(b_weight.get() or 0)
+        selected_color = [r, g, b, 255]
+    except ValueError as e:
+        showinfo(title="Blad", message=f"{e}")
+
+
+
+
+
+
+
+
 
 
 
