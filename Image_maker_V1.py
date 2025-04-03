@@ -228,6 +228,15 @@ def enable_drawing():
     inne_op = ttk.Button(window, text="inne operacje", width=20, command=wybor_dzialan)
     inne_op.place(x=500, y=750)
 
+    save_button = ttk.Button(window, text="zapisz", width=20, command=save_drawing)
+    save_button.place(x=100, y=750)
+
+
+def save_drawing():
+    drawn_image_path = os.path.join(timestamped_folder_path, f"rysowane_{datetime.now().strftime('%H-%M-%S')}_{image_name}").replace('\\', '/')
+    os.makedirs(os.path.dirname(drawn_image_path), exist_ok=True)
+    drawing_image.save(drawn_image_path)
+
 def validate_tolerance(tol, feedback7):  # walidacja tego progu
 
     val = tol.get().strip()
