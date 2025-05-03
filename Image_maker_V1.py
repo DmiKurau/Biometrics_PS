@@ -1,7 +1,11 @@
 import os, math, itertools, time
 import numpy as np
 import tkinter as tk  # GUI window
+import random
 
+from collections import Counter
+import math
+from statistics import mean, stdev
 from tkinter import ttk , messagebox # input fields
 from tkinter import filedialog as fd  # file open
 from tkinter.messagebox import showinfo  # info box
@@ -9,8 +13,13 @@ from PIL import Image, ImageTk, ImageDraw
 from matplotlib import pyplot as plt
 from datetime import datetime
 from collections.abc import Iterable
+from collections import defaultdict
 from scipy.signal import convolve2d
 from scipy.ndimage import generic_filter, binary_dilation, binary_erosion, minimum_filter, maximum_filter
+from math import sqrt
+from scipy.spatial.distance import braycurtis, canberra, chebyshev, cityblock, euclidean, minkowski, hamming
+from sklearn.naive_bayes import GaussianNB # Correct import
+from sklearn.preprocessing import StandardScaler
 
 
 window = tk.Tk()
@@ -39,6 +48,7 @@ b_weight = tk.StringVar()
 poin="1"
 tolerance=tk.StringVar()
 global_flood_enabled = False
+compare_all=False
 drawing_image = None
 original_drawing_image = None
 drawing_draw = None
@@ -46,9 +56,17 @@ drawing_tk_image = None
 selected_color = [255, 0, 0, 255]  # Default red color
 global_flood_mode = False
 
+sample_paths = []
+labels = []
+parsed_samples = []
+feature_vectors = []
 
-# image.show()
-
+all_keys = [chr(i) for i in range(65, 91)]  # A-Z
+all_keys.append('SPACE')
+all_keys.append('LSHIFT')
+selected_method=''
+selected_metric=''
+kvalue=3
 
 # mono_image = Image.fromarray(binary_array);  nie dziala, binary array: signed, PIL potrzebuje unsigned
 
@@ -67,6 +85,7 @@ def HELP_window(message):
 
     close_button = ttk.Button(message_window, text="Zamknij", command=message_window.destroy)
     close_button.pack(pady=10)
+
 
 def select_file():  # wybiera plik (zdjecie)
     kill_UI()
@@ -94,6 +113,769 @@ def select_file():  # wybiera plik (zdjecie)
 
         except Exception as e:
             showinfo(title="Blad", message=f"{e}")
+
+
+
+def select_folder():
+    kill_UI()
+    global full_path, dataframe, filename, image_location, image_name, image, timestamped_folder_path, folder
+    global sample_paths, labels
+
+
+    # ──> Ask for a folder instead
+    folder = fd.askdirectory(title="Wybierz folder z próbkami klawiatury")
+    if folder:
+        try:
+            sample_paths = []
+            labels = []
+
+            for file in os.listdir(folder):
+                if file.endswith('.txt') or file.endswith('.csv'):
+                    full_path = os.path.join(folder, file).replace('\\', '/')
+                    sample_paths.append(full_path)
+                    labels.append(os.path.splitext(file)[0])
+
+            labels = [label.lower().strip() for label in labels]
+            showinfo(title="Folder przetworzony", message=f"Znaleziono {len(sample_paths)} plików.")
+            classifier_buttons()
+
+        except Exception as e:
+            showinfo(title="Błąd folderu", message=f"{e}")
+
+def set_metric(metric):
+    global selected_metric
+    selected_metric = metric
+
+def set_method(method):
+    global selected_method
+    selected_method = method
+
+
+    
+def classifier_buttons():
+    global btn_toggle_mode
+    metric_mannhattan = ttk.Button(window, text="mannhattan metric", width=20, command=lambda: set_metric("mannhattan"))
+    metric_mannhattan.place(x=200, y=100)
+    metric_euclidean = ttk.Button(window, text="euclidean metric", width=20, command=lambda: set_metric("euclidean"))
+    metric_euclidean.place(x=200, y=200)
+    metric_chebyshev = ttk.Button(window, text="chebyshev metric", width=20, command=lambda: set_metric("chebyshev"))
+    metric_chebyshev.place(x=200, y=300)
+
+    metric_braycurtis = ttk.Button(window, text="braycurtis metric", width=20, command=lambda: set_metric("braycurtis"))
+    metric_braycurtis.place(x=200, y=400)
+    metric_canberra = ttk.Button(window, text="canbera metric", width=20, command=lambda: set_metric("canberra"))
+    metric_canberra.place(x=200, y=500)
+    metric_minkowski = ttk.Button(window, text="minkowski metric", width=20, command=lambda: set_metric("minkowski"))
+    metric_minkowski.place(x=200, y=600)
+    metric_hamming = ttk.Button(window, text="hamming metric", width=20, command=lambda: set_metric("hamming"))
+    metric_hamming.place(x=200, y=700)
+
+    method_knn = ttk.Button(window, text="k-NN method", width=20, command=lambda: set_method("k-NN"))
+    method_knn.place(x=400, y=300)
+    method_Nbayes = ttk.Button(window, text="Naive Bayes", width=20, command=lambda: set_method("Naive Bayes"))
+    method_Nbayes.place(x=400, y=500)
+
+    btn_toggle_mode = ttk.Button(window, text='compare all?', width=20, command=toggle_mode)
+    btn_toggle_mode.place(x=600, y=150)
+
+    calculate_metrics = ttk.Button(window, text="Calculate", width=20, command=lambda: run_keystroke_analysis(method=selected_method,num_k=kvalue,distance_metric=selected_metric ,custom_keys=None,compare_mode=compare_all))
+    calculate_metrics.place(x=600, y=400)
+
+
+    kval = tk.StringVar()
+    feedback4 = ttk.Label(window, text="", background="#e7e7e7")
+    feedback4.place(x=600, y=350)
+    entry11 = ttk.Entry(window, textvariable=kval, width=30)
+    entry11.place(x=600, y=300)
+    kval.trace_add("write", lambda *args: validate_kval(kval, feedback4, calculate_metrics))
+
+
+def validate_kval(kval, feedback4, calculate_metrics):  # walidacja tego progu
+    global kvalue
+    val = kval.get().strip()
+
+    if val.isdigit() and (0 <= int(val) <= 255) and (int(val)%2==1):
+        kvalue = int(val)
+        feedback4.config(text="Prawidlowe", foreground="green")
+        calculate_metrics.config(state="normal")
+    else:
+        feedback4.config(text="Nie Prawidlowe \n\n\n (wartosci nieparzyste tylko od 0 do 255)", foreground="red")
+        calculate_metrics.config(state="disabled")
+
+
+def toggle_mode():
+    global compare_all, btn_toggle_mode  # Both need to be global
+
+    compare_all = not compare_all
+    if compare_all:
+        btn_toggle_mode.config(text="tryb porównania Wł")
+    else:
+        btn_toggle_mode.config(text="tryb porównania Wył")
+
+
+
+
+def run_keystroke_analysis(
+                           method="k-NN",
+                           num_k=3,
+                           distance_metric="manhattan",
+                           custom_keys=None,
+                           compare_mode=False):
+    global folder
+    samples_dir=folder
+    # Use custom keys if specified, otherwise use all keys
+    target_keys = custom_keys if custom_keys is not None else all_keys
+
+    print(f"=== KEYSTROKE CLASSIFIER ===")
+    print(f"Directory: {samples_dir}")
+    print(f"Method: {method}")
+
+    # If compare_mode is True, run multiple configurations
+    if compare_mode:
+        # Store results for each configuration
+        all_results = []
+
+        # Define distance metrics to test
+        distance_metrics = [
+            "manhattan", "euclidean", "chebyshev",
+            "braycurtis", "canberra", "minkowski", "hamming"
+        ]
+
+        # Try different k values and distance metrics
+        k_values = [1, 3, 5]
+
+        # Define key sets to try
+        key_sets = [
+            ['A', 'E', 'O', 'I', 'SPACE'],
+            ['LSHIFT', 'A', 'T', 'E', 'N'],
+            ['B', 'C', 'D', 'F', 'G'],
+            ['SPACE', 'A', 'E', 'T', 'N', 'O', 'I', 'S', 'R']  # Common letters
+        ]
+
+        print("\n1. K-NEAREST NEIGHBORS")
+        # Test all distance metrics with k=3 and all keys
+        for metric in distance_metrics:
+            accuracy = evaluate_classifier(samples_dir, all_keys, 3, metric)
+            all_results.append((3, all_keys.copy(), accuracy, "k-NN", metric))
+            print(f"k=3, metric={metric}, using all keys: Accuracy = {accuracy:.2%}")
+
+        # Try different k values with best metric
+        best_metric = max(all_results, key=lambda x: x[2])[4]
+        print(f"\nBest metric so far: {best_metric}. Testing with different k values...")
+
+        for k in k_values:
+            if k != 3:  # Skip k=3 as we already tested it
+                accuracy = evaluate_classifier(samples_dir, all_keys, k, best_metric)
+                all_results.append((k, all_keys.copy(), accuracy, "k-NN", best_metric))
+                print(f"k={k}, metric={best_metric}, using all keys: Accuracy = {accuracy:.2%}")
+
+        # Try different key sets with best k and metric
+        best_k = max(all_results, key=lambda x: x[2])[0]
+        print(f"\nBest k so far: {best_k}. Testing with different key sets...")
+
+        for key_set in key_sets:
+            accuracy = evaluate_classifier(samples_dir, key_set, best_k, best_metric)
+            all_results.append((best_k, key_set.copy(), accuracy, "k-NN", best_metric))
+            print(f"k={best_k}, metric={best_metric}, keys={key_set}: Accuracy = {accuracy:.2%}")
+
+        print("\n2. NAIVE BAYES")
+        # Evaluate Naive Bayes with all keys
+        nb_accuracy = evaluate_naive_bayes(samples_dir, all_keys)
+        all_results.append((None, all_keys.copy(), nb_accuracy, "Naive Bayes", None))
+        print(f"Naive Bayes, using all keys: Accuracy = {nb_accuracy:.2%}")
+
+        # Try with different key sets
+        for key_set in key_sets:
+            nb_accuracy = evaluate_naive_bayes(samples_dir, key_set)
+            all_results.append((None, key_set.copy(), nb_accuracy, "Naive Bayes", None))
+            print(f"Naive Bayes, keys={key_set}: Accuracy = {nb_accuracy:.2%}")
+
+        # Sort all results
+        all_results.sort(key=lambda x: x[2], reverse=True)
+
+        # Print the top configurations
+        print("\n=== TOP FIVE BEST CONFIGURATIONS ===")
+
+        # Prepare message for tkinter dialog
+        top_results_msg = "=== TOP FIVE BEST CONFIGURATIONS ===\n\n"
+
+        for i in range(min(5, len(all_results))):
+            k, key_set, accuracy, method, metric = all_results[i]
+
+            if method == "k-NN":
+                result_line = f"#{i + 1}: Method={method}, k={k}, metric={metric}, Accuracy={accuracy:.2%}"
+                print(result_line)
+            else:
+                result_line = f"#{i + 1}: Method={method}, Accuracy={accuracy:.2%}"
+                print(result_line)
+
+            top_results_msg += result_line + "\n"
+
+            if len(key_set) > 10:
+                keys_info = f"   Keys used: {len(key_set)} keys including {', '.join(key_set[:5])}... and others"
+                print(keys_info)
+            else:
+                keys_info = f"   Keys used: {', '.join(key_set)}"
+                print(keys_info)
+
+            top_results_msg += keys_info + "\n\n"
+            print()
+
+        # Display comparison results in tkinter showinfo box
+        import tkinter as tk
+        from tkinter import messagebox
+
+        root = tk.Tk()
+        root.withdraw()  # Hide the main window
+        messagebox.showinfo("Keystroke Comparison Results", top_results_msg)
+        root.destroy()
+
+        # Return the best configuration
+        if all_results:
+            return all_results[0][2]  # Return the accuracy of the best configuration
+        return 0.0
+
+    # Otherwise, run a single configuration with specified parameters
+    else:
+        print(
+            f"Keys: {target_keys if len(target_keys) <= 5 else f'{len(target_keys)} keys including {target_keys[:5]}...'}")
+
+        if method == "k-NN":
+            print(f"k value: {num_k}")
+            print(f"Distance metric: {distance_metric}")
+            accuracy = evaluate_classifier(samples_dir, target_keys, num_k, distance_metric)
+            print(f"\nResults: Accuracy = {accuracy:.2%}")
+
+            # Display results in tkinter showinfo box
+            import tkinter as tk
+            from tkinter import messagebox
+
+            keys_str = ', '.join(target_keys) if len(
+                target_keys) <= 5 else f"{len(target_keys)} keys including {', '.join(target_keys[:5])}..."
+            result_msg = f"Method: {method}\nk value: {num_k}\nDistance metric: {distance_metric}\nKeys: {keys_str}\n\nAccuracy: {accuracy:.2%}"
+
+            root = tk.Tk()
+            root.withdraw()  # Hide the main window
+            messagebox.showinfo("Keystroke Analysis Results", result_msg)
+            root.destroy()
+
+            return accuracy
+
+        elif method == "Naive Bayes":
+            accuracy = evaluate_naive_bayes(samples_dir, target_keys)
+            print(f"\nResults: Accuracy = {accuracy:.2%}")
+
+            # Display results in tkinter showinfo box
+            import tkinter as tk
+            from tkinter import messagebox
+
+            keys_str = ', '.join(target_keys) if len(
+                target_keys) <= 5 else f"{len(target_keys)} keys including {', '.join(target_keys[:5])}..."
+            result_msg = f"Method: {method}\nKeys: {keys_str}\n\nAccuracy: {accuracy:.2%}"
+
+            root = tk.Tk()
+            root.withdraw()  # Hide the main window
+            messagebox.showinfo("Keystroke Analysis Results", result_msg)
+            root.destroy()
+
+            return accuracy
+
+        else:
+            print(f"Error: Unknown method '{method}'. Please choose 'k-NN' or 'Naive Bayes'.")
+
+            # Display error in tkinter showinfo box
+            import tkinter as tk
+            from tkinter import messagebox
+
+            root = tk.Tk()
+            root.withdraw()  # Hide the main window
+            messagebox.showerror("Keystroke Analysis Error",
+                                 f"Unknown method '{method}'.\nPlease choose 'k-NN' or 'Naive Bayes'.")
+            root.destroy()
+
+            return 0.0
+
+
+def naive_bayes_train(training_features, training_labels, target_keys=None):
+    """
+    Train a Naive Bayes classifier on keystroke data
+
+    Args:
+        training_features: List of feature dictionaries for training samples
+        training_labels: List of labels for training samples
+        target_keys: Keys to consider for features
+
+    Returns:
+        Dictionary of model parameters (priors and likelihoods)
+    """
+    if target_keys is None:
+        target_keys = ['X', 'Y', 'Z']
+
+    # Get unique classes (users)
+    classes = list(set(training_labels))
+
+    # Calculate class priors P(C)
+    class_counts = Counter(training_labels)
+    total_samples = len(training_labels)
+    priors = {cls: class_counts[cls] / total_samples for cls in classes}
+
+    # Calculate likelihood parameters (mean and stdev) for each feature in each class
+    # We assume each feature follows a normal distribution within a class
+    likelihoods = {}
+
+    for cls in classes:
+        likelihoods[cls] = {}
+        # Get all samples for this class
+        class_samples = [training_features[i] for i in range(len(training_features))
+                         if training_labels[i] == cls]
+
+        # Calculate statistics for each key
+        for key in target_keys:
+            # Extract values for this feature (key) across all samples of this class
+            values = [sample.get(key, 0) for sample in class_samples]
+
+            # Need at least 2 samples to calculate standard deviation
+            if len(values) >= 2:
+                # Calculate mean and standard deviation
+                mean_val = mean(values)
+                std_val = stdev(values)
+                # Ensure std is not zero to avoid division by zero
+                std_val = max(std_val, 0.0001)
+            else:
+                # If only one sample, use a default std
+                mean_val = values[0] if values else 0
+                std_val = 0.1  # Small default value
+
+            likelihoods[cls][key] = {'mean': mean_val, 'std': std_val}
+
+    return {'priors': priors, 'likelihoods': likelihoods}
+
+
+def gaussian_probability(x, mean, std):
+    """Calculate the probability of x using Gaussian PDF"""
+    exponent = math.exp(-((x - mean) ** 2) / (2 * std ** 2))
+    return (1 / (math.sqrt(2 * math.pi) * std)) * exponent
+
+
+def naive_bayes_classify(sample_features, model, target_keys=None):
+    """
+    Classify a sample using trained Naive Bayes model
+
+    Args:
+        sample_features: Features of the sample to classify
+        model: Trained model parameters (priors and likelihoods)
+        target_keys: Keys to consider for features
+
+    Returns:
+        Predicted label for the sample
+    """
+    if target_keys is None:
+        target_keys = ['X', 'Y', 'Z']
+
+    priors = model['priors']
+    likelihoods = model['likelihoods']
+    classes = list(priors.keys())
+
+    # Calculate posterior probability for each class
+    posteriors = {}
+
+    for cls in classes:
+        # Start with log prior
+        posterior = math.log(priors[cls])
+
+        # Add log likelihoods for each feature
+        for key in target_keys:
+            # Get sample value for this feature
+            value = sample_features.get(key, 0)
+
+            # Get likelihood parameters for this feature in this class
+            params = likelihoods[cls].get(key, {'mean': 0, 'std': 0.1})
+            mean_val = params['mean']
+            std_val = params['std']
+
+            # Calculate log likelihood
+            try:
+                likelihood = gaussian_probability(value, mean_val, std_val)
+                # Avoid log(0) by setting a minimum likelihood
+                likelihood = max(likelihood, 1e-10)
+                posterior += math.log(likelihood)
+            except (ValueError, OverflowError):
+                # Skip this feature if there's a numerical error
+                continue
+
+        posteriors[cls] = posterior
+
+    # Return class with highest posterior probability
+    return max(posteriors.items(), key=lambda x: x[1])[0]
+
+
+def evaluate_naive_bayes(samples_dir, target_keys=None):
+    """
+    Evaluate Naive Bayes classifier using leave-one-out cross-validation
+
+    Args:
+        samples_dir: Directory containing sample files
+        target_keys: Keys to use for features
+
+    Returns:
+        Accuracy of the classifier
+    """
+    if target_keys is None:
+        target_keys = ['X', 'Y', 'Z']
+
+    # Get all sample files
+    try:
+        sample_files = [f for f in os.listdir(samples_dir) if
+                        os.path.isfile(os.path.join(samples_dir, f)) and f.endswith(('.txt', '.csv'))]
+
+        if not sample_files:
+            print(f"No text or CSV files found in {samples_dir}")
+            return 0
+    except Exception as e:
+        print(f"Error accessing directory {samples_dir}: {e}")
+        return 0
+
+    # Extract user labels and parse samples
+    all_samples = []
+    all_labels = []
+
+    for file in sample_files:
+        try:
+            # Extract user label from filename
+            user_label = file.split('_')[0]
+
+            # Parse sample
+            path = os.path.join(samples_dir, file)
+            strokes = parse_sample(path)
+
+            if strokes:
+                # Extract features
+                features = extract_features(strokes, target_keys)
+
+                # Store sample and label
+                all_samples.append(features)
+                all_labels.append(user_label)
+        except Exception as e:
+            print(f"Error processing file {file}: {e}")
+            continue
+
+    if not all_samples:
+        print("No valid samples could be processed")
+        return 0
+
+    if len(set(all_labels)) < 2:
+        print("Need at least two different users for classification")
+        return 0
+
+    # Evaluate using leave-one-out cross-validation
+    correct = 0
+    total = 0
+
+    for i in range(len(all_samples)):
+        # Create training set without current sample
+        training_features = all_samples[:i] + all_samples[i + 1:]
+        training_labels = all_labels[:i] + all_labels[i + 1:]
+
+        # Train Naive Bayes model
+        model = naive_bayes_train(training_features, training_labels, target_keys)
+
+        # Classify current sample
+        predicted_label = naive_bayes_classify(all_samples[i], model, target_keys)
+
+        # Check if prediction is correct
+        if predicted_label == all_labels[i]:
+            correct += 1
+        total += 1
+
+    # Calculate accuracy
+    accuracy = correct / total if total > 0 else 0
+
+    return accuracy
+
+
+
+
+
+def parse_sample(path):
+    strokes = []
+    try:
+        with open(path, 'r') as file:
+            for line in file:
+                # Clean and split
+                parts = [p.strip() for p in line.strip().split(',')]
+                if len(parts) != 3:
+                    print(f"Skipping line in {path} due to incorrect number of fields: {line.strip()}")
+                    continue  # Skip bad lines
+
+                key = parts[0].upper().strip()  # Ensure consistent case and remove extra whitespace
+                try:
+                    flight = float(parts[1])
+                    dwell = float(parts[2])
+                    strokes.append((key, round(flight, 2), round(dwell, 2)))
+                except ValueError:
+                    print(f"Skipping line in {path} due to invalid number format: {line.strip()}")
+                    continue
+    except Exception as e:
+        print(f"Error processing file {path}: {e}")
+        return []
+
+    return strokes
+
+
+def extract_features(strokes, target_keys=None):
+    """
+    Extract average dwell times for specified target keys
+
+    Args:
+        strokes: List of (key, flight, dwell) tuples
+        target_keys: List of keys to calculate average dwell times for
+                     If None, defaults to ['X', 'Y', 'Z']
+
+    Returns:
+        Dictionary mapping keys to their average dwell times
+    """
+    if target_keys is None:
+        target_keys = ['X', 'Y', 'Z']
+
+    features = {}
+    for key in target_keys:
+        # Handle 'SPACE' key which might be represented as space character or 'SPACE'
+        if key == 'SPACE':
+            key_strokes = [stroke[2] for stroke in strokes if stroke[0] == key or stroke[0] == ' ']
+        else:
+            key_strokes = [stroke[2] for stroke in strokes if stroke[0] == key]
+
+        if key_strokes:
+            features[key] = sum(key_strokes) / len(key_strokes)
+        else:
+            features[key] = 0  # No instances of this key
+
+    return features
+
+
+def calculate_distance(features1, features2, target_keys=None, metric="manhattan"):
+    """
+    Calculate distance between two feature vectors using various metrics
+
+    Args:
+        features1, features2: Feature dictionaries to compare
+        target_keys: Keys to consider for distance calculation
+        metric: Distance metric to use (manhattan, euclidean, chebyshev, braycurtis,
+                canberra, minkowski, hamming)
+
+    Returns:
+        Distance between the feature vectors
+    """
+    if target_keys is None:
+        target_keys = ['X', 'Y', 'Z']
+
+    # Extract values as vectors, replacing missing values with 0
+    vector1 = [features1.get(key, 0) for key in target_keys]
+    vector2 = [features2.get(key, 0) for key in target_keys]
+
+    # Convert to numpy arrays for easier calculation
+    v1 = np.array(vector1)
+    v2 = np.array(vector2)
+
+    if metric == "manhattan":
+        # Manhattan (L1) distance: sum of absolute differences
+        return np.sum(np.abs(v1 - v2))
+
+    elif metric == "euclidean":
+        # Euclidean (L2) distance: square root of sum of squared differences
+        return np.sqrt(np.sum((v1 - v2) ** 2))
+
+    elif metric == "chebyshev":
+        # Chebyshev (L∞) distance: maximum absolute difference
+        return np.max(np.abs(v1 - v2))
+
+    elif metric == "braycurtis":
+        # Bray-Curtis distance: sum of absolute differences divided by sum of absolute values
+        # Avoid division by zero
+        denominator = np.sum(np.abs(v1) + np.abs(v2))
+        if denominator == 0:
+            return 0
+        return np.sum(np.abs(v1 - v2)) / denominator
+
+    elif metric == "canberra":
+        # Canberra distance: sum of (|x_i - y_i| / (|x_i| + |y_i|))
+        # Handle division by zero
+        result = 0
+        for i in range(len(v1)):
+            denominator = np.abs(v1[i]) + np.abs(v2[i])
+            if denominator > 0:  # Avoid division by zero
+                result += np.abs(v1[i] - v2[i]) / denominator
+        return result
+
+    elif metric == "minkowski":
+        # Minkowski distance with p=3
+        p = 3
+        return np.power(np.sum(np.power(np.abs(v1 - v2), p)), 1 / p)
+
+    elif metric == "hamming":
+        # Hamming distance: percentage of components that differ
+        # For continuous data, we consider values "different" if they differ by more than a threshold
+        threshold = 0.001
+        return np.mean(np.abs(v1 - v2) > threshold)
+
+    else:
+        # Default to Manhattan distance
+        return np.sum(np.abs(v1 - v2))
+
+
+def knn_classifier(sample_features, training_features, training_labels, k=3, target_keys=None,
+                   distance_metric="manhattan"):
+    """
+    Classify sample using k-NN
+
+    Args:
+        sample_features: Features of the sample to classify
+        training_features: List of feature dictionaries for training samples
+        training_labels: List of labels for training samples
+        k: Number of nearest neighbors to consider
+        target_keys: Keys to consider for features
+        distance_metric: Distance metric to use for comparing samples
+
+    Returns:
+        Predicted label for the sample
+    """
+    if target_keys is None:
+        target_keys = ['X', 'Y', 'Z']
+
+    # Calculate distances to all training samples
+    distances = []
+    for i, features in enumerate(training_features):
+        dist = calculate_distance(sample_features, features, target_keys, distance_metric)
+        distances.append((dist, training_labels[i]))
+
+    # Sort by distance
+    distances.sort(key=lambda x: x[0])
+
+    # Get k nearest neighbors
+    k_nearest = distances[:k]
+
+    # Count labels
+    label_counts = Counter([label for _, label in k_nearest])
+
+    # Find the most common label
+    most_common = label_counts.most_common()
+
+    # If there are ties, choose the closest one
+    if len(most_common) > 1 and most_common[0][1] == most_common[1][1]:
+        # Find the closest sample with the tied labels
+        for dist, label in k_nearest:
+            if label in [l for l, count in most_common if count == most_common[0][1]]:
+                return label
+
+    return most_common[0][0]
+
+
+def evaluate_classifier(samples_dir, target_keys=None, k=3, distance_metric="manhattan"):
+    """
+    Evaluate k-NN classifier using leave-one-out cross-validation
+
+    Args:
+        samples_dir: Directory containing sample files
+        target_keys: Keys to use for features
+        k: Number of nearest neighbors
+        distance_metric: Distance metric to use
+
+    Returns:
+        Accuracy of the classifier
+    """
+    if target_keys is None:
+        target_keys = ['X', 'Y', 'Z']
+
+    # Get all sample files
+    try:
+        sample_files = [f for f in os.listdir(samples_dir) if
+                        os.path.isfile(os.path.join(samples_dir, f)) and f.endswith(('.txt', '.csv'))]
+
+        if not sample_files:
+            print(f"No text or CSV files found in {samples_dir}")
+            return 0
+    except Exception as e:
+        print(f"Error accessing directory {samples_dir}: {e}")
+        return 0
+
+    # Extract user labels and parse samples
+    users = {}
+    all_samples = []
+    all_labels = []
+
+    for file in sample_files:
+        try:
+            # Extract user label from filename
+            # Assuming filename format like "#01_2.txt" where "#01" is the user
+            user_label = file.split('_')[0]
+
+            # Parse sample
+            path = os.path.join(samples_dir, file)
+            strokes = parse_sample(path)
+
+            if strokes:
+                # Extract features
+                features = extract_features(strokes, target_keys)
+
+                # Store sample and label
+                all_samples.append(features)
+                all_labels.append(user_label)
+
+                # Group by user
+                if user_label not in users:
+                    users[user_label] = []
+                users[user_label].append(features)
+        except Exception as e:
+            print(f"Error processing file {file}: {e}")
+            continue
+
+    if not all_samples:
+        print("No valid samples could be processed")
+        return 0
+
+    if len(users) < 2:
+        print("Need at least two different users for classification")
+        return 0
+
+    # Make sure k is not larger than the number of samples
+    effective_k = min(k, len(all_samples) - 1)
+    if effective_k < k:
+        print(f"Warning: Reducing k from {k} to {effective_k} due to limited number of samples")
+
+    # Evaluate using leave-one-out cross-validation
+    correct = 0
+    total = 0
+
+    for i in range(len(all_samples)):
+        # Create training set without current sample
+        training_features = all_samples[:i] + all_samples[i + 1:]
+        training_labels = all_labels[:i] + all_labels[i + 1:]
+
+        # Classify current sample
+        predicted_label = knn_classifier(all_samples[i], training_features, training_labels,
+                                         effective_k, target_keys, distance_metric)
+
+        # Check if prediction is correct
+        if predicted_label == all_labels[i]:
+            correct += 1
+        total += 1
+
+    # Calculate accuracy
+    accuracy = correct / total if total > 0 else 0
+
+    return accuracy
+
+
+
+
+
+
+
+
+
+
+
+
 
 def get_thresh():  # wpisywanie progu dla binaryzacji
 
@@ -1657,10 +2439,17 @@ def is_valid_r_value(val):
 
 
 
-open_button = ttk.Button(
+open_button1 = ttk.Button(
     window,
     text='Otworz plik',
     command=select_file)
-open_button.place(x=250, y=400)
+open_button1.place(x=250, y=400)
+open_button2 = ttk.Button(
+    window,
+    text='Otworz folder',
+    command=select_folder)
+open_button2.place(x=500, y=400)
+
+
 
 window.mainloop()
