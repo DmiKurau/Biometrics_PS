@@ -638,30 +638,30 @@ def display_results(binary, skeleton, highlighted, minutiae, mask):
     ttk.Label(display_frame, text="Binary Image").grid(row=1, column=0)
 
     mask_label = ttk.Label(display_frame, image=mask_tk)
-    mask_label.grid(row=0, column=1, padx=5, pady=5)
+    mask_label.grid(row=0, column=1, padx=5, pady=0)
     ttk.Label(display_frame, text="Segmentation Mask").grid(row=1, column=1)
 
     skeleton_label = ttk.Label(display_frame, image=skeleton_tk)
-    skeleton_label.grid(row=2, column=0, padx=5, pady=5)
+    skeleton_label.grid(row=2, column=0, padx=5, pady=0)
     ttk.Label(display_frame, text="Skeleton").grid(row=3, column=0)
 
     highlighted_label = ttk.Label(display_frame, image=highlighted_tk)
-    highlighted_label.grid(row=2, column=1, padx=5, pady=5)
+    highlighted_label.grid(row=2, column=1, padx=5, pady=0)
     ttk.Label(display_frame, text="Minutiae").grid(row=3, column=1)
 
     # Display minutiae statistics
     stats_frame = ttk.LabelFrame(window, text="Minutiae Statistics")
-    stats_frame.pack(fill="x", padx=10, pady=10)
+    stats_frame.pack(fill="x", padx=10, pady=5)
 
     minutiae_text = f"Endings: {len(endings)}\nBifurcations: {len(bifurcations)}\nCrossings: {len(crossings)}\n"
     minutiae_text += f"Total: {len(endings) + len(bifurcations) + len(crossings)}"
 
     stats_label = ttk.Label(stats_frame, text=minutiae_text)
-    stats_label.pack(padx=10, pady=10)
+    stats_label.pack(padx=10, pady=5)
 
     # Save button
     save_frame = ttk.Frame(window)
-    save_frame.pack(fill="x", padx=10, pady=10)
+    save_frame.pack(fill="x", padx=10, pady=5)
 
     save_button = ttk.Button(
         save_frame,
@@ -1275,15 +1275,14 @@ def display_comparison(results1, results2, title1, title2):
     display_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
     # Title for comparison
-    ttk.Label(display_frame, text="Fingerprint Comparison", font=("Arial", 14)).grid(row=0, column=0, columnspan=4,
-                                                                                     pady=10)
+    ttk.Label(display_frame, text="Fingerprint Comparison", font=("Arial", 14)).grid(row=0, column=0, columnspan=6, pady=10)
 
-    # Create left and right frames
-    left_frame = ttk.LabelFrame(display_frame, text=title1)
-    left_frame.grid(row=1, column=0, columnspan=2, padx=10, pady=10, sticky="nsew")
+    # Create top and bottom frames
+    top_frame = ttk.LabelFrame(display_frame, text=title1)
+    top_frame.grid(row=1, column=0, columnspan=6, padx=10, pady=5, sticky="nsew")
 
-    right_frame = ttk.LabelFrame(display_frame, text=title2)
-    right_frame.grid(row=1, column=2, columnspan=2, padx=10, pady=10, sticky="nsew")
+    bottom_frame = ttk.LabelFrame(display_frame, text=title2)
+    bottom_frame.grid(row=2, column=0, columnspan=6, padx=10, pady=5, sticky="nsew")
 
     # Convert OpenCV images to PIL format for Tkinter
     binary_pil1 = Image.fromarray(binary1)
@@ -1295,14 +1294,14 @@ def display_comparison(results1, results2, title1, title2):
     highlighted_pil2 = Image.fromarray(cv2.cvtColor(highlighted2, cv2.COLOR_BGR2RGB))
 
     # Resize images for display
-    max_height = 200
-    binary_pil1.thumbnail((250, max_height))
-    skeleton_pil1.thumbnail((250, max_height))
-    highlighted_pil1.thumbnail((250, max_height))
+    max_width = 300
+    binary_pil1.thumbnail((max_width, 250))
+    skeleton_pil1.thumbnail((max_width, 250))
+    highlighted_pil1.thumbnail((max_width, 250))
 
-    binary_pil2.thumbnail((250, max_height))
-    skeleton_pil2.thumbnail((250, max_height))
-    highlighted_pil2.thumbnail((250, max_height))
+    binary_pil2.thumbnail((max_width, 250))
+    skeleton_pil2.thumbnail((max_width, 250))
+    highlighted_pil2.thumbnail((max_width, 250))
 
     # Convert to PhotoImage for tkinter
     binary_tk1 = ImageTk.PhotoImage(binary_pil1)
@@ -1321,35 +1320,35 @@ def display_comparison(results1, results2, title1, title2):
     display_frame.skeleton_tk2 = skeleton_tk2
     display_frame.highlighted_tk2 = highlighted_tk2
 
-    # Left side images
-    binary_label1 = ttk.Label(left_frame, image=binary_tk1)
+    # Top row images (first fingerprint)
+    binary_label1 = ttk.Label(top_frame, image=binary_tk1)
     binary_label1.grid(row=0, column=0, padx=5, pady=5)
-    ttk.Label(left_frame, text="Binary Image").grid(row=1, column=0)
+    ttk.Label(top_frame, text="Binary Image").grid(row=1, column=0)
 
-    skeleton_label1 = ttk.Label(left_frame, image=skeleton_tk1)
-    skeleton_label1.grid(row=2, column=0, padx=5, pady=5)
-    ttk.Label(left_frame, text="Skeleton").grid(row=3, column=0)
+    skeleton_label1 = ttk.Label(top_frame, image=skeleton_tk1)
+    skeleton_label1.grid(row=0, column=1, padx=5, pady=5)
+    ttk.Label(top_frame, text="Skeleton").grid(row=1, column=1)
 
-    highlighted_label1 = ttk.Label(left_frame, image=highlighted_tk1)
-    highlighted_label1.grid(row=4, column=0, padx=5, pady=5)
-    ttk.Label(left_frame, text="Minutiae").grid(row=5, column=0)
+    highlighted_label1 = ttk.Label(top_frame, image=highlighted_tk1)
+    highlighted_label1.grid(row=0, column=2, padx=5, pady=5)
+    ttk.Label(top_frame, text="Minutiae").grid(row=1, column=2)
 
-    # Right side images
-    binary_label2 = ttk.Label(right_frame, image=binary_tk2)
+    # Bottom row images (second fingerprint)
+    binary_label2 = ttk.Label(bottom_frame, image=binary_tk2)
     binary_label2.grid(row=0, column=0, padx=5, pady=5)
-    ttk.Label(right_frame, text="Binary Image").grid(row=1, column=0)
+    ttk.Label(bottom_frame, text="Binary Image").grid(row=1, column=0)
 
-    skeleton_label2 = ttk.Label(right_frame, image=skeleton_tk2)
-    skeleton_label2.grid(row=2, column=0, padx=5, pady=5)
-    ttk.Label(right_frame, text="Skeleton").grid(row=3, column=0)
+    skeleton_label2 = ttk.Label(bottom_frame, image=skeleton_tk2)
+    skeleton_label2.grid(row=0, column=1, padx=5, pady=5)
+    ttk.Label(bottom_frame, text="Skeleton").grid(row=1, column=1)
 
-    highlighted_label2 = ttk.Label(right_frame, image=highlighted_tk2)
-    highlighted_label2.grid(row=4, column=0, padx=5, pady=5)
-    ttk.Label(right_frame, text="Minutiae").grid(row=5, column=0)
+    highlighted_label2 = ttk.Label(bottom_frame, image=highlighted_tk2)
+    highlighted_label2.grid(row=0, column=2, padx=5, pady=5)
+    ttk.Label(bottom_frame, text="Minutiae").grid(row=1, column=2)
 
     # Display minutiae statistics
     stats_frame = ttk.LabelFrame(window, text="Minutiae Statistics")
-    stats_frame.pack(fill="x", padx=10, pady=10)
+    stats_frame.pack(fill="x", padx=10, pady=5)
 
     # Create frame for statistics
     stats_grid = ttk.Frame(stats_frame)
@@ -1389,7 +1388,7 @@ def display_comparison(results1, results2, title1, title2):
 
     # Button frame
     button_frame = ttk.Frame(window)
-    button_frame.pack(fill="x", padx=10, pady=10)
+    button_frame.pack(fill="x", padx=10, pady=5)
 
     # Save button
     save_button = ttk.Button(
@@ -1407,7 +1406,6 @@ def display_comparison(results1, results2, title1, title2):
         command=reset_UI
     )
     new_button.pack(side="right", padx=5)
-
 
 def save_comparison(binary1, skeleton1, highlighted1, binary2, skeleton2, highlighted2, title1, title2):
     """Save the comparison results to the timestamped folder"""
@@ -1525,11 +1523,11 @@ def display_results(binary, skeleton, highlighted, minutiae, mask):
 
     # Display minutiae statistics
     stats_frame = ttk.LabelFrame(window, text="Minutiae Statistics")
-    stats_frame.pack(fill="x", padx=10, pady=10)
+    stats_frame.pack(fill="x", padx=10, pady=0)
 
     # Create frame for statistics
     stats_grid = ttk.Frame(stats_frame)
-    stats_grid.pack(padx=10, pady=10)
+    stats_grid.pack(padx=10, pady=0)
 
     # Add statistics
     ttk.Label(stats_grid, text="Endings:", font=("Arial", 10)).grid(row=0, column=0, padx=5, pady=2, sticky="w")
@@ -2096,7 +2094,7 @@ class ThinningAlgorithm(Enum):
 # Create the main window
 window = tk.Tk()
 window.title("Fingerprint Analysis System")
-window.geometry("1000x1050")
+window.geometry("1000x920")
 window.resizable(False, False)
 
 # Initialize global variables
